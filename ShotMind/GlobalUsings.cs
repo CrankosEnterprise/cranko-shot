@@ -1,0 +1,23 @@
+// Resolve type ambiguities between WPF (System.Windows) and Windows Forms (System.Windows.Forms) / System.Drawing
+global using Application = System.Windows.Application;
+global using MessageBox = System.Windows.MessageBox;
+global using Clipboard = System.Windows.Clipboard;
+global using DataFormats = System.Windows.DataFormats;
+global using IDataObject = System.Windows.IDataObject;
+global using DragEventArgs = System.Windows.DragEventArgs;
+global using DragDropEffects = System.Windows.DragDropEffects;
+global using Point = System.Windows.Point;
+global using Size = System.Windows.Size;
+global using KeyEventArgs = System.Windows.Input.KeyEventArgs;
+global using MouseEventArgs = System.Windows.Input.MouseEventArgs;
+global using Cursors = System.Windows.Input.Cursors;
+global using Color = System.Windows.Media.Color;
+global using Pen = System.Windows.Media.Pen;
+global using Brush = System.Windows.Media.Brush;
+global using Brushes = System.Windows.Media.Brushes;
+global using Button = System.Windows.Controls.Button;
+global using ColorConverter = System.Windows.Media.ColorConverter;
+global using Path = System.IO.Path;
+global using SaveFileDialog = Microsoft.Win32.SaveFileDialog;
+global using OpenFileDialog = Microsoft.Win32.OpenFileDialog;
+global using Cursor = System.Windows.Input.Cursor;

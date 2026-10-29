@@ -1,0 +1,521 @@
+<Window x:Class="ShotMind.UI.Views.CaptureOverlayWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="CrankoShot — Captura de Tela"
+        WindowStyle="None"
+        AllowsTransparency="True"
+        Background="Transparent"
+        Topmost="True"
+        ShowInTaskbar="False"
+        WindowState="Normal"
+        Focusable="True"
+        PreviewKeyDown="Window_PreviewKeyDown">
+
+    <Grid x:Name="RootGrid" ClipToBounds="True">
+        <!-- Frozen screen snapshot background -->
+        <Image x:Name="BackgroundImage" Stretch="None" HorizontalAlignment="Left" VerticalAlignment="Top" />
+
+        <!-- Canvas for dimming mask, selection rectangle, drawing annotations and toolbars -->
+        <Canvas x:Name="OverlayCanvas"
+                Background="Transparent"
+                MouseDown="OverlayCanvas_MouseDown"
+                MouseMove="OverlayCanvas_MouseMove"
+                MouseUp="OverlayCanvas_MouseUp">
+
+            <!-- Dimming Mask with transparent cutout -->
+            <Path x:Name="DimmingPath" Fill="#80000000">
+                <Path.Data>
+                    <CombinedGeometry GeometryCombineMode="Exclude">
+                        <CombinedGeometry.Geometry1>
+                            <RectangleGeometry x:Name="ScreenGeometry" />
+                        </CombinedGeometry.Geometry1>
+                        <CombinedGeometry.Geometry2>
+                            <RectangleGeometry x:Name="SelectionGeometry" />
+                        </CombinedGeometry.Geometry2>
+                    </CombinedGeometry>
+                </Path.Data>
+            </Path>
+
+            <!-- Selection Border -->
+            <Rectangle x:Name="SelectionBorder"
+                       Stroke="{DynamicResource AccentPrimaryBrush}"
+                       StrokeThickness="2"
+                       StrokeDashArray="3 2"
+                       Visibility="Collapsed"
+                       IsHitTestVisible="False" />
+
+            <!-- Dimension Badge -->
+            <Border x:Name="DimensionBadge"
+                    Background="{StaticResource BgFloatingGlassBrush}"
+                    BorderBrush="#38FFFFFF"
+                    BorderThickness="1"
+                    CornerRadius="7"
+                    Padding="9,3"
+                    Effect="{StaticResource GlassCardShadow}"
+                    Visibility="Collapsed"
+                    IsHitTestVisible="False">
+                <TextBlock x:Name="DimensionText"
+                           Foreground="#F8FAFC"
+                           FontSize="11.5"
+                           FontWeight="SemiBold"
+                           Text="0 x 0" />
+            </Border>
+
+            <!-- 8 Visible Resize Handles (Corners & Edges) -->
+            <Rectangle x:Name="HandleNW" Width="8" Height="8" Fill="{DynamicResource AccentPrimaryBrush}" Stroke="White" StrokeThickness="1.5" Visibility="Collapsed" IsHitTestVisible="False" />
+            <Rectangle x:Name="HandleN"  Width="8" Height="8" Fill="{DynamicResource AccentPrimaryBrush}" Stroke="White" StrokeThickness="1.5" Visibility="Collapsed" IsHitTestVisible="False" />
+            <Rectangle x:Name="HandleNE" Width="8" Height="8" Fill="{DynamicResource AccentPrimaryBrush}" Stroke="White" StrokeThickness="1.5" Visibility="Collapsed" IsHitTestVisible="False" />
+            <Rectangle x:Name="HandleE"  Width="8" Height="8" Fill="{DynamicResource AccentPrimaryBrush}" Stroke="White" StrokeThickness="1.5" Visibility="Collapsed" IsHitTestVisible="False" />
+            <Rectangle x:Name="HandleSE" Width="8" Height="8" Fill="{DynamicResource AccentPrimaryBrush}" Stroke="White" StrokeThickness="1.5" Visibility="Collapsed" IsHitTestVisible="False" />
+            <Rectangle x:Name="HandleS"  Width="8" Height="8" Fill="{DynamicResource AccentPrimaryBrush}" Stroke="White" StrokeThickness="1.5" Visibility="Collapsed" IsHitTestVisible="False" />
+            <Rectangle x:Name="HandleSW" Width="8" Height="8" Fill="{DynamicResource AccentPrimaryBrush}" Stroke="White" StrokeThickness="1.5" Visibility="Collapsed" IsHitTestVisible="False" />
+            <Rectangle x:Name="HandleW"  Width="8" Height="8" Fill="{DynamicResource AccentPrimaryBrush}" Stroke="White" StrokeThickness="1.5" Visibility="Collapsed" IsHitTestVisible="False" />
+
+            <!-- Annotation Drawing Surface (clipped to selection) -->
+            <Canvas x:Name="AnnotationCanvas" Visibility="Collapsed" IsHitTestVisible="False" />
+
+            <!-- ================= BARRA HORIZONTAL: FERRAMENTAS DE DESENHO ================= -->
+            <Border x:Name="DrawingToolbar"
+                    Background="{StaticResource BgFloatingGlassBrush}"
+                    BorderBrush="{DynamicResource AccentPrimaryBrush}"
+                    BorderThickness="1"
+                    CornerRadius="10"
+                    Padding="6,5"
+                    Effect="{StaticResource GlassFloatingShadow}"
+                    Visibility="Collapsed"
+                    Panel.ZIndex="1000">
+                <StackPanel Orientation="Horizontal">
+                    <!-- Select / Move -->
+                    <Button x:Name="BtnToolSelect" Style="{StaticResource ToolbarIconButton}" Margin="1,0" ToolTip="Mover / Redimensionar Seleção" Click="BtnTool_Click" Tag="Select">
+                        <TextBlock Text="✥" FontSize="14" />
+                    </Button>
+
+                    <!-- Pen Group (Caneta / Marca-texto / Espessura) -->
+                    <Grid Margin="1,0">
+                        <Button x:Name="BtnPenGroup" Style="{StaticResource ToolbarIconButton}" ToolTip="Caneta &amp; Marca-texto (Passe o mouse para opções)" Click="BtnPenGroup_Click" MouseEnter="BtnPenGroup_MouseEnter" MouseLeave="BtnPenGroup_MouseLeave">
+                            <TextBlock x:Name="TxtActivePenIcon" Text="✎" FontSize="14" HorizontalAlignment="Center" VerticalAlignment="Center" />
+                        </Button>
+                        <Popup x:Name="PopupPenMenu" PlacementTarget="{Binding ElementName=BtnPenGroup}" Placement="Top" VerticalOffset="-4" AllowsTransparency="True" StaysOpen="True" PopupAnimation="Fade">
+                            <Border Background="#1F1F24" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1" CornerRadius="6" Padding="6" MouseEnter="PopupPenMenu_MouseEnter" MouseLeave="PopupPenMenu_MouseLeave">
+                                <StackPanel Orientation="Vertical">
+                                    <Button x:Name="BtnToolPen" Style="{StaticResource ToolbarIconButton}" Width="140" Height="28" ToolTip="Caneta (Traço Livre)" Click="BtnSelectPenTool_Click" Tag="Pen">
+                                        <DockPanel LastChildFill="True" Margin="4,0">
+                                            <TextBlock Text="✎" FontSize="13" Margin="0,0,8,0" DockPanel.Dock="Left"/>
+                                            <TextBlock Text="Caneta" FontSize="12" VerticalAlignment="Center"/>
+                                        </DockPanel>
+                                    </Button>
+                                    <Button x:Name="BtnToolHighlighter" Style="{StaticResource ToolbarIconButton}" Width="140" Height="28" ToolTip="Marca-texto" Click="BtnSelectPenTool_Click" Tag="Highlighter">
+                                        <DockPanel LastChildFill="True" Margin="4,0">
+                                            <TextBlock Text="🖍" FontSize="12" Margin="0,0,8,0" DockPanel.Dock="Left"/>
+                                            <TextBlock Text="Marca-texto" FontSize="12" VerticalAlignment="Center"/>
+                                        </DockPanel>
+                                    </Button>
+                                    <Separator Background="#3F3F46" Margin="0,4"/>
+                                    <DockPanel Margin="4,0,4,2">
+                                        <TextBlock Text="Espessura:" Foreground="#A1A1AA" FontSize="10" DockPanel.Dock="Left" VerticalAlignment="Center"/>
+                                        <TextBlock x:Name="TxtPenThicknessValue" Text="3 px" Foreground="{DynamicResource TextPrimaryBrush}" FontSize="10" FontWeight="SemiBold" DockPanel.Dock="Right" HorizontalAlignment="Right" VerticalAlignment="Center"/>
+                                    </DockPanel>
+                                    <StackPanel Orientation="Horizontal" HorizontalAlignment="Center" Margin="0,0,0,4">
+                                        <Button Style="{StaticResource ToolbarIconButton}" Width="32" Height="24" Margin="1,0" Click="BtnPenThickness_Click" Tag="2" ToolTip="Fina (2px)">
+                                            <Rectangle Width="16" Height="2" Fill="{Binding RelativeSource={RelativeSource AncestorType=Button}, Path=Foreground}" />
+                                        </Button>
+                                        <Button Style="{StaticResource ToolbarIconButton}" Width="32" Height="24" Margin="1,0" Click="BtnPenThickness_Click" Tag="4" ToolTip="Média (4px)">
+                                            <Rectangle Width="16" Height="4" Fill="{Binding RelativeSource={RelativeSource AncestorType=Button}, Path=Foreground}" />
+                                        </Button>
+                                        <Button Style="{StaticResource ToolbarIconButton}" Width="32" Height="24" Margin="1,0" Click="BtnPenThickness_Click" Tag="8" ToolTip="Grossa (8px)">
+                                            <Rectangle Width="16" Height="8" Fill="{Binding RelativeSource={RelativeSource AncestorType=Button}, Path=Foreground}" />
+                                        </Button>
+                                        <Button Style="{StaticResource ToolbarIconButton}" Width="32" Height="24" Margin="1,0" Click="BtnPenThickness_Click" Tag="14" ToolTip="Muito Grossa (14px)">
+                                            <Rectangle Width="16" Height="12" Fill="{Binding RelativeSource={RelativeSource AncestorType=Button}, Path=Foreground}" RadiusX="1" RadiusY="1"/>
+                                        </Button>
+                                    </StackPanel>
+                                    <Slider x:Name="SliderPenThickness" Minimum="1" Maximum="32" Value="3" SmallChange="1" LargeChange="2" Margin="4,2" ValueChanged="SliderPenThickness_ValueChanged"/>
+                                </StackPanel>
+                            </Border>
+                        </Popup>
+                    </Grid>
+
+                    <!-- Arrow -->
+                    <Button x:Name="BtnToolArrow" Style="{StaticResource ToolbarIconButton}" Margin="1,0" ToolTip="Seta (➔)" Click="BtnTool_Click" Tag="Arrow">
+                        <TextBlock Text="➔" FontSize="14" />
+                    </Button>
+
+                    <!-- Shapes Group (Retângulo, Círculo, Linha) -->
+                    <Grid Margin="1,0">
+                        <Button x:Name="BtnShapesGroup" Style="{StaticResource ToolbarIconButton}" ToolTip="Formas Geométricas (Passe o mouse para opções)" Click="BtnShapesGroup_Click" MouseEnter="BtnShapesGroup_MouseEnter" MouseLeave="BtnShapesGroup_MouseLeave">
+                            <TextBlock x:Name="TxtActiveShapeIcon" Text="▭" FontSize="14" HorizontalAlignment="Center" VerticalAlignment="Center" />
+                        </Button>
+                        <Popup x:Name="PopupShapesMenu" PlacementTarget="{Binding ElementName=BtnShapesGroup}" Placement="Top" VerticalOffset="-4" AllowsTransparency="True" StaysOpen="True" PopupAnimation="Fade">
+                            <Border Background="#1F1F24" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1" CornerRadius="6" Padding="6" MouseEnter="PopupShapesMenu_MouseEnter" MouseLeave="PopupShapesMenu_MouseLeave">
+                                <StackPanel Orientation="Vertical">
+                                    <Button x:Name="BtnToolRect" Style="{StaticResource ToolbarIconButton}" Width="130" Height="28" ToolTip="Retângulo" Click="BtnSelectShapeTool_Click" Tag="Rectangle">
+                                        <DockPanel LastChildFill="True" Margin="4,0">
+                                            <TextBlock Text="▭" FontSize="14" Margin="0,0,8,0" DockPanel.Dock="Left"/>
+                                            <TextBlock Text="Retângulo" FontSize="12" VerticalAlignment="Center"/>
+                                        </DockPanel>
+                                    </Button>
+                                    <Button x:Name="BtnToolEllipse" Style="{StaticResource ToolbarIconButton}" Width="130" Height="28" ToolTip="Círculo / Elipse" Click="BtnSelectShapeTool_Click" Tag="Ellipse">
+                                        <DockPanel LastChildFill="True" Margin="4,0">
+                                            <TextBlock Text="◯" FontSize="14" Margin="0,0,8,0" DockPanel.Dock="Left"/>
+                                            <TextBlock Text="Círculo / Elipse" FontSize="12" VerticalAlignment="Center"/>
+                                        </DockPanel>
+                                    </Button>
+                                    <Button x:Name="BtnToolLine" Style="{StaticResource ToolbarIconButton}" Width="130" Height="28" ToolTip="Linha Reta" Click="BtnSelectShapeTool_Click" Tag="Line">
+                                        <DockPanel LastChildFill="True" Margin="4,0">
+                                            <TextBlock Text="╱" FontSize="14" FontWeight="Bold" Margin="0,0,8,0" DockPanel.Dock="Left"/>
+                                            <TextBlock Text="Linha Reta" FontSize="12" VerticalAlignment="Center"/>
+                                        </DockPanel>
+                                    </Button>
+                                    <Separator Background="#3F3F46" Margin="0,4"/>
+                                    <TextBlock Text="Espessura da borda:" Foreground="#A1A1AA" FontSize="10" Margin="4,0,0,3"/>
+                                    <StackPanel Orientation="Horizontal" HorizontalAlignment="Center">
+                                        <Button Style="{StaticResource ToolbarIconButton}" Width="36" Height="24" Margin="1,0" Click="BtnPenThickness_Click" Tag="2" ToolTip="Fina (2px)">
+                                            <Rectangle Width="18" Height="2" Fill="{Binding RelativeSource={RelativeSource AncestorType=Button}, Path=Foreground}" />
+                                        </Button>
+                                        <Button Style="{StaticResource ToolbarIconButton}" Width="36" Height="24" Margin="1,0" Click="BtnPenThickness_Click" Tag="4" ToolTip="Média (4px)">
+                                            <Rectangle Width="18" Height="4" Fill="{Binding RelativeSource={RelativeSource AncestorType=Button}, Path=Foreground}" />
+                                        </Button>
+                                        <Button Style="{StaticResource ToolbarIconButton}" Width="36" Height="24" Margin="1,0" Click="BtnPenThickness_Click" Tag="8" ToolTip="Grossa (8px)">
+                                            <Rectangle Width="18" Height="8" Fill="{Binding RelativeSource={RelativeSource AncestorType=Button}, Path=Foreground}" />
+                                        </Button>
+                                    </StackPanel>
+                                </StackPanel>
+                            </Border>
+                        </Popup>
+                    </Grid>
+
+                    <!-- Step Markers Group (Marcadores Numerados) -->
+                    <Grid Margin="1,0">
+                        <Button x:Name="BtnStepMarkerGroup" Style="{StaticResource ToolbarIconButton}" ToolTip="Marcadores Numerados (Passe o mouse para opções)" Click="BtnStepMarkerGroup_Click" MouseEnter="BtnStepMarkerGroup_MouseEnter" MouseLeave="BtnStepMarkerGroup_MouseLeave">
+                            <TextBlock x:Name="TxtActiveMarkerIcon" Text="①" FontSize="14" HorizontalAlignment="Center" VerticalAlignment="Center" />
+                        </Button>
+                        <Popup x:Name="PopupStepMarkerMenu" PlacementTarget="{Binding ElementName=BtnStepMarkerGroup}" Placement="Top" VerticalOffset="-4" AllowsTransparency="True" StaysOpen="True" PopupAnimation="Fade">
+                            <Border Background="#1F1F24" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1" CornerRadius="8" Padding="8" MouseEnter="PopupStepMarkerMenu_MouseEnter" MouseLeave="PopupStepMarkerMenu_MouseLeave">
+                                <StackPanel Orientation="Vertical" Width="188">
+                                    <TextBlock Text="Estilo dos Marcadores" Foreground="#A1A1AA" FontSize="11" FontWeight="SemiBold" Margin="0,0,0,6"/>
+                                    <UniformGrid Columns="2" Margin="0,0,0,8">
+                                        <Button x:Name="BtnMarkerStyleNumbers" Style="{StaticResource ChipButtonStyle}" Margin="1" Padding="4,3" Click="BtnMarkerStyle_Click" Tag="Numbers" ToolTip="Números: 1, 2, 3...">
+                                            <TextBlock Text="1️⃣ 1, 2, 3" FontSize="11"/>
+                                        </Button>
+                                        <Button x:Name="BtnMarkerStyleUpper" Style="{StaticResource ChipButtonStyle}" Margin="1" Padding="4,3" Click="BtnMarkerStyle_Click" Tag="Uppercase" ToolTip="Letras Maiúsculas: A, B, C...">
+                                            <TextBlock Text="🔤 A, B, C" FontSize="11"/>
+                                        </Button>
+                                        <Button x:Name="BtnMarkerStyleLower" Style="{StaticResource ChipButtonStyle}" Margin="1" Padding="4,3" Click="BtnMarkerStyle_Click" Tag="Lowercase" ToolTip="Letras Minúsculas: a, b, c...">
+                                            <TextBlock Text="🔡 a, b, c" FontSize="11"/>
+                                        </Button>
+                                        <Button x:Name="BtnMarkerStyleDots" Style="{StaticResource ChipButtonStyle}" Margin="1" Padding="4,3" Click="BtnMarkerStyle_Click" Tag="Dots" ToolTip="Pontos sólidos sem texto">
+                                            <TextBlock Text="⚫ Pontos" FontSize="11"/>
+                                        </Button>
+                                    </UniformGrid>
+
+                                    <Separator Background="#3F3F46" Margin="0,2,0,6"/>
+                                    <DockPanel Margin="0,0,0,4">
+                                        <TextBlock Text="Tamanho:" Foreground="#A1A1AA" FontSize="10.5" DockPanel.Dock="Left" VerticalAlignment="Center"/>
+                                        <TextBlock x:Name="TxtMarkerSizeValue" Text="26 px" Foreground="{DynamicResource TextPrimaryBrush}" FontSize="10.5" FontWeight="SemiBold" DockPanel.Dock="Right" HorizontalAlignment="Right" VerticalAlignment="Center"/>
+                                    </DockPanel>
+                                    <UniformGrid Columns="3" Margin="0,0,0,8">
+                                        <Button Style="{StaticResource ChipButtonStyle}" Margin="1" Padding="2,2" Click="BtnMarkerSizePreset_Click" Tag="20" ToolTip="Pequeno (20px)">
+                                            <TextBlock Text="Pequeno" FontSize="10"/>
+                                        </Button>
+                                        <Button Style="{StaticResource ChipButtonStyle}" Margin="1" Padding="2,2" Click="BtnMarkerSizePreset_Click" Tag="26" ToolTip="Médio (26px)">
+                                            <TextBlock Text="Médio" FontSize="10"/>
+                                        </Button>
+                                        <Button Style="{StaticResource ChipButtonStyle}" Margin="1" Padding="2,2" Click="BtnMarkerSizePreset_Click" Tag="34" ToolTip="Grande (34px)">
+                                            <TextBlock Text="Grande" FontSize="10"/>
+                                        </Button>
+                                    </UniformGrid>
+
+                                    <Separator Background="#3F3F46" Margin="0,2,0,6"/>
+                                    <Button Style="{StaticResource SecondaryButtonStyle}" Height="28" Padding="6,2" FontSize="11" Click="BtnRestartMarkerSequence_Click" ToolTip="Reiniciar a contagem da sequência a partir do 1 ou A">
+                                        <StackPanel Orientation="Horizontal" HorizontalAlignment="Center">
+                                            <TextBlock Text="🔄" Margin="0,0,4,0"/>
+                                            <TextBlock Text="Reiniciar Sequência"/>
+                                        </StackPanel>
+                                    </Button>
+                                </StackPanel>
+                            </Border>
+                        </Popup>
+                    </Grid>
+
+                    <!-- Text -->
+                    <Button x:Name="BtnToolText" Style="{StaticResource ToolbarIconButton}" Margin="1,0" ToolTip="Inserir Texto (T)" Click="BtnTool_Click" Tag="Text">
+                        <TextBlock Text="T" FontSize="14" FontWeight="Bold" />
+                    </Button>
+
+                    <!-- Blur / Obfuscate Flyout Group -->
+                    <Grid Margin="1,0">
+                        <Button x:Name="BtnBlurGroup" Style="{StaticResource ToolbarIconButton}" ToolTip="Ocultação: Desfoque ou Pixelado (Passe o mouse para opções)" Click="BtnBlurGroup_Click" MouseEnter="BtnBlurGroup_MouseEnter" MouseLeave="BtnBlurGroup_MouseLeave">
+                            <TextBlock x:Name="TxtActiveBlurIcon" Text="💧" FontSize="13" HorizontalAlignment="Center" VerticalAlignment="Center" />
+                        </Button>
+                        <Popup x:Name="PopupBlurMenu" PlacementTarget="{Binding ElementName=BtnBlurGroup}" Placement="Top" VerticalOffset="-4" AllowsTransparency="True" StaysOpen="True" PopupAnimation="Fade">
+                            <Border Background="#1F1F24" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1" CornerRadius="6" Padding="8" MouseEnter="PopupBlurMenu_MouseEnter" MouseLeave="PopupBlurMenu_MouseLeave">
+                                <StackPanel Orientation="Vertical" Width="184">
+                                    <TextBlock Text="Tipo de Ocultação" Foreground="#A1A1AA" FontSize="11" FontWeight="SemiBold" Margin="0,0,0,6"/>
+                                    <Grid Margin="0,0,0,8">
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="*"/>
+                                            <ColumnDefinition Width="*"/>
+                                        </Grid.ColumnDefinitions>
+                                        <Button x:Name="BtnSelectBlurMode" Grid.Column="0" Style="{StaticResource ChipButtonStyle}" MinHeight="28" Margin="0,0,2,0" Padding="4,2" Click="BtnSelectBlurMode_Click" ToolTip="Desfoque suave">
+                                            <StackPanel Orientation="Horizontal">
+                                                <TextBlock Text="💧" FontSize="11" Margin="0,0,4,0"/>
+                                                <TextBlock Text="Blur" FontSize="11"/>
+                                            </StackPanel>
+                                        </Button>
+                                        <Button x:Name="BtnSelectPixelateMode" Grid.Column="1" Style="{StaticResource ChipButtonStyle}" MinHeight="28" Margin="2,0,0,0" Padding="4,2" Click="BtnSelectPixelateMode_Click" ToolTip="Mosaico em blocos">
+                                            <StackPanel Orientation="Horizontal">
+                                                <TextBlock Text="▦" FontSize="11" Margin="0,0,4,0"/>
+                                                <TextBlock Text="Pixelado" FontSize="11"/>
+                                            </StackPanel>
+                                        </Button>
+                                    </Grid>
+
+                                    <DockPanel LastChildFill="False" Margin="0,0,0,4">
+                                        <TextBlock DockPanel.Dock="Left" Text="Intensidade:" Foreground="#A1A1AA" FontSize="11" />
+                                        <TextBlock DockPanel.Dock="Right" x:Name="TxtBlurIntensityValue" Text="12 px" Foreground="White" FontSize="11" FontWeight="Bold" />
+                                    </DockPanel>
+                                    <Slider x:Name="SliderBlurIntensity" Minimum="2" Maximum="36" Value="12" SmallChange="1" LargeChange="4" TickFrequency="2" IsSnapToTickEnabled="True" ValueChanged="SliderBlurIntensity_ValueChanged" Margin="0,0,0,6"/>
+
+                                    <UniformGrid Columns="3" Margin="0,2,0,0">
+                                        <Button Style="{StaticResource ChipButtonStyle}" MinHeight="24" Margin="1" Padding="2,1" Click="BtnBlurPreset_Click" Tag="4">
+                                            <TextBlock Text="Suave" FontSize="10"/>
+                                        </Button>
+                                        <Button Style="{StaticResource ChipButtonStyle}" MinHeight="24" Margin="1" Padding="2,1" Click="BtnBlurPreset_Click" Tag="12">
+                                            <TextBlock Text="Médio" FontSize="10"/>
+                                        </Button>
+                                        <Button Style="{StaticResource ChipButtonStyle}" MinHeight="24" Margin="1" Padding="2,1" Click="BtnBlurPreset_Click" Tag="24">
+                                            <TextBlock Text="Forte" FontSize="10"/>
+                                        </Button>
+                                    </UniformGrid>
+                                </StackPanel>
+                            </Border>
+                        </Popup>
+                    </Grid>
+
+                    <!-- Color Flyout Group -->
+                    <Grid Margin="1,0">
+                        <Button x:Name="BtnColorGroup" Style="{StaticResource ToolbarIconButton}" ToolTip="Cor da Anotação (Passe o mouse para opções)" Click="BtnColorGroup_Click" MouseEnter="BtnColorGroup_MouseEnter" MouseLeave="BtnColorGroup_MouseLeave">
+                            <Ellipse x:Name="EllipseActiveColor" Width="14" Height="14" Fill="#8B5CF6" Stroke="White" StrokeThickness="1" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                        </Button>
+                        <Popup x:Name="PopupColorMenu" PlacementTarget="{Binding ElementName=BtnColorGroup}" Placement="Top" VerticalOffset="-4" AllowsTransparency="True" StaysOpen="True" PopupAnimation="Fade">
+                            <Border Background="#1C1C21" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1" CornerRadius="8" Padding="8" MouseEnter="PopupColorMenu_MouseEnter" MouseLeave="PopupColorMenu_MouseLeave">
+                                <StackPanel Orientation="Vertical" Width="218">
+                                    <!-- Preview & Hex Input -->
+                                    <Grid Margin="0,0,0,8">
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="26"/>
+                                            <ColumnDefinition Width="*"/>
+                                            <ColumnDefinition Width="Auto"/>
+                                        </Grid.ColumnDefinitions>
+                                        <Border Grid.Column="0" Width="24" Height="24" CornerRadius="12" BorderBrush="#52525B" BorderThickness="1" Background="#27272A" HorizontalAlignment="Left" VerticalAlignment="Center">
+                                            <Ellipse x:Name="EllipseColorPickerPreview" Width="18" Height="18" Fill="#8B5CF6" Stroke="White" StrokeThickness="0.5"/>
+                                        </Border>
+                                        <TextBox x:Name="TxtColorPickerHex" Grid.Column="1" Height="26" Margin="6,0,4,0" Background="#141418" Foreground="White" BorderBrush="#3F3F46" BorderThickness="1" Padding="4,2" FontSize="11" Text="#8B5CF6" VerticalContentAlignment="Center" TextChanged="TxtColorPickerHex_TextChanged" KeyDown="TxtColorPickerHex_KeyDown"/>
+                                        <Button x:Name="BtnApplyColorPickerHex" Grid.Column="2" Style="{StaticResource SecondaryButtonStyle}" Height="26" Padding="8,0" FontSize="10.5" Content="OK" Click="BtnApplyColorPickerHex_Click" ToolTip="Aplicar código hexadecimal"/>
+                                    </Grid>
+
+                                    <!-- Cores Vibrantes -->
+                                    <TextBlock Text="Cores Vibrantes" Foreground="#A1A1AA" FontSize="10" FontWeight="SemiBold" Margin="2,0,0,3"/>
+                                    <WrapPanel Width="216" Margin="0,0,0,6">
+                                        <Button Style="{StaticResource ToolbarIconButton}" Width="25" Height="25" Margin="1" Click="BtnColor_Click" Tag="#EF4444" ToolTip="Vermelho">
+                                            <Ellipse Width="15" Height="15" Fill="#EF4444" Stroke="White" StrokeThickness="0.5"/>
+                                        </Button>
+                                        <Button Style="{StaticResource ToolbarIconButton}" Width="25" Height="25" Margin="1" Click="BtnColor_Click" Tag="#F97316" ToolTip="Laranja">
+                                            <Ellipse Width="15" Height="15" Fill="#F97316" Stroke="White" StrokeThickness="0.5"/>
+                                        </Button>
+                                        <Button Style="{StaticResource ToolbarIconButton}" Width="25" Height="25" Margin="1" Click="BtnColor_Click" Tag="#F59E0B" ToolTip="Amarelo">
+                                            <Ellipse Width="15" Height="15" Fill="#F59E0B" Stroke="White" StrokeThickness="0.5"/>
+                                        </Button>
+                                        <Button Style="{StaticResource ToolbarIconButton}" Width="25" Height="25" Margin="1" Click="BtnColor_Click" Tag="#10B981" ToolTip="Verde">
+                                            <Ellipse Width="15" Height="15" Fill="#10B981" Stroke="White" StrokeThickness="0.5"/>
+                                        </Button>
+                                        <Button Style="{StaticResource ToolbarIconButton}" Width="25" Height="25" Margin="1" Click="BtnColor_Click" Tag="#06B6D4" ToolTip="Ciano">
+                                            <Ellipse Width="15" Height="15" Fill="#06B6D4" Stroke="White" StrokeThickness="0.5"/>
+                                        </Button>
+                                        <Button Style="{StaticResource ToolbarIconButton}" Width="25" Height="25" Margin="1" Click="BtnColor_Click" Tag="#3B82F6" ToolTip="Azul">
+                                            <Ellipse Width="15" Height="15" Fill="#3B82F6" Stroke="White" StrokeThickness="0.5"/>
+                                        </Button>
+                                        <Button Style="{StaticResource ToolbarIconButton}" Width="25" Height="25" Margin="1" Click="BtnColor_Click" Tag="#8B5CF6" ToolTip="Roxo">
+                                            <Ellipse Width="15" Height="15" Fill="#8B5CF6" Stroke="White" StrokeThickness="0.5"/>
+                                        </Button>
+                                        <Button Style="{StaticResource ToolbarIconButton}" Width="25" Height="25" Margin="1" Click="BtnColor_Click" Tag="#EC4899" ToolTip="Rosa">
+                                            <Ellipse Width="15" Height="15" Fill="#EC4899" Stroke="White" StrokeThickness="0.5"/>
+                                        </Button>
+                                    </WrapPanel>
+
+                                    <!-- Tons Claros e Pastéis -->
+                                    <TextBlock Text="Tons Claros &amp; Pastéis" Foreground="#A1A1AA" FontSize="10" FontWeight="SemiBold" Margin="2,0,0,3"/>
+                                    <WrapPanel Width="216" Margin="0,0,0,6">
+                                        <Button Style="{StaticResource ToolbarIconButton}" Width="25" Height="25" Margin="1" Click="BtnColor_Click" Tag="#FCA5A5" ToolTip="Vermelho Claro">
+                                            <Ellipse Width="15" Height="15" Fill="#FCA5A5" Stroke="White" StrokeThickness="0.5"/>
+                                        </Button>
+                                        <Button Style="{StaticResource ToolbarIconButton}" Width="25" Height="25" Margin="1" Click="BtnColor_Click" Tag="#FED7AA" ToolTip="Laranja Claro">
+                                            <Ellipse Width="15" Height="15" Fill="#FED7AA" Stroke="White" StrokeThickness="0.5"/>
+                                        </Button>
+                                        <Button Style="{StaticResource ToolbarIconButton}" Width="25" Height="25" Margin="1" Click="BtnColor_Click" Tag="#FDE68A" ToolTip="Amarelo Claro">
+                                            <Ellipse Width="15" Height="15" Fill="#FDE68A" Stroke="White" StrokeThickness="0.5"/>
+                                        </Button>
+                                        <Button Style="{StaticResource ToolbarIconButton}" Width="25" Height="25" Margin="1" Click="BtnColor_Click" Tag="#86EFAC" ToolTip="Verde Claro">
+                                            <Ellipse Width="15" Height="15" Fill="#86EFAC" Stroke="White" StrokeThickness="0.5"/>
+                                        </Button>
+                                        <Button Style="{StaticResource ToolbarIconButton}" Width="25" Height="25" Margin="1" Click="BtnColor_Click" Tag="#67E8F9" ToolTip="Ciano Claro">
+                                            <Ellipse Width="15" Height="15" Fill="#67E8F9" Stroke="White" StrokeThickness="0.5"/>
+                                        </Button>
+                                        <Button Style="{StaticResource ToolbarIconButton}" Width="25" Height="25" Margin="1" Click="BtnColor_Click" Tag="#BFDBFE" ToolTip="Azul Claro">
+                                            <Ellipse Width="15" Height="15" Fill="#BFDBFE" Stroke="White" StrokeThickness="0.5"/>
+                                        </Button>
+                                        <Button Style="{StaticResource ToolbarIconButton}" Width="25" Height="25" Margin="1" Click="BtnColor_Click" Tag="#DDD6FE" ToolTip="Roxo Claro">
+                                            <Ellipse Width="15" Height="15" Fill="#DDD6FE" Stroke="White" StrokeThickness="0.5"/>
+                                        </Button>
+                                        <Button Style="{StaticResource ToolbarIconButton}" Width="25" Height="25" Margin="1" Click="BtnColor_Click" Tag="#FBCFE8" ToolTip="Rosa Claro">
+                                            <Ellipse Width="15" Height="15" Fill="#FBCFE8" Stroke="White" StrokeThickness="0.5"/>
+                                        </Button>
+                                    </WrapPanel>
+
+                                    <!-- Neutros e Escuros -->
+                                    <TextBlock Text="Neutros &amp; Escuros" Foreground="#A1A1AA" FontSize="10" FontWeight="SemiBold" Margin="2,0,0,3"/>
+                                    <WrapPanel Width="216" Margin="0,0,0,8">
+                                        <Button Style="{StaticResource ToolbarIconButton}" Width="25" Height="25" Margin="1" Click="BtnColor_Click" Tag="#FFFFFF" ToolTip="Branco">
+                                            <Ellipse Width="15" Height="15" Fill="#FFFFFF" Stroke="#3F3F46" StrokeThickness="1"/>
+                                        </Button>
+                                        <Button Style="{StaticResource ToolbarIconButton}" Width="25" Height="25" Margin="1" Click="BtnColor_Click" Tag="#CBD5E1" ToolTip="Cinza Claro">
+                                            <Ellipse Width="15" Height="15" Fill="#CBD5E1" Stroke="#3F3F46" StrokeThickness="0.5"/>
+                                        </Button>
+                                        <Button Style="{StaticResource ToolbarIconButton}" Width="25" Height="25" Margin="1" Click="BtnColor_Click" Tag="#64748B" ToolTip="Cinza Médio">
+                                            <Ellipse Width="15" Height="15" Fill="#64748B" Stroke="White" StrokeThickness="0.5"/>
+                                        </Button>
+                                        <Button Style="{StaticResource ToolbarIconButton}" Width="25" Height="25" Margin="1" Click="BtnColor_Click" Tag="#1E293B" ToolTip="Cinza Escuro">
+                                            <Ellipse Width="15" Height="15" Fill="#1E293B" Stroke="White" StrokeThickness="0.5"/>
+                                        </Button>
+                                        <Button Style="{StaticResource ToolbarIconButton}" Width="25" Height="25" Margin="1" Click="BtnColor_Click" Tag="#000000" ToolTip="Preto">
+                                            <Ellipse Width="15" Height="15" Fill="#000000" Stroke="White" StrokeThickness="1"/>
+                                        </Button>
+                                        <Button Style="{StaticResource ToolbarIconButton}" Width="25" Height="25" Margin="1" Click="BtnColor_Click" Tag="#991B1B" ToolTip="Bordô">
+                                            <Ellipse Width="15" Height="15" Fill="#991B1B" Stroke="White" StrokeThickness="0.5"/>
+                                        </Button>
+                                        <Button Style="{StaticResource ToolbarIconButton}" Width="25" Height="25" Margin="1" Click="BtnColor_Click" Tag="#065F46" ToolTip="Verde Floresta">
+                                            <Ellipse Width="15" Height="15" Fill="#065F46" Stroke="White" StrokeThickness="0.5"/>
+                                        </Button>
+                                        <Button Style="{StaticResource ToolbarIconButton}" Width="25" Height="25" Margin="1" Click="BtnColor_Click" Tag="#1E3A8A" ToolTip="Azul Escuro">
+                                            <Ellipse Width="15" Height="15" Fill="#1E3A8A" Stroke="White" StrokeThickness="0.5"/>
+                                        </Button>
+                                    </WrapPanel>
+
+                                    <Separator Background="#3F3F46" Margin="0,0,0,6"/>
+                                    <Button Style="{StaticResource ChipButtonStyle}" MinHeight="26" Padding="6,2" FontSize="11" HorizontalAlignment="Stretch" Content="🎨 Paleta do Windows..." Click="BtnCustomAnnotationColor_Click" ToolTip="Abrir paleta avançada de cores do Windows"/>
+                                </StackPanel>
+                            </Border>
+                        </Popup>
+                    </Grid>
+
+                    <!-- Separador vertical visual ao lado do seletor de cor -->
+                    <Border Width="1"
+                            Height="18"
+                            Background="{DynamicResource BorderBrush}"
+                            VerticalAlignment="Center"
+                            Margin="5,0,5,0"
+                            SnapsToDevicePixels="True"
+                            IsHitTestVisible="False" />
+
+                    <!-- Undo / Redo -->
+                    <Button Style="{StaticResource ToolbarIconButton}" Margin="1,0" ToolTip="Desfazer (Ctrl+Z)" Click="BtnUndo_Click">
+                        <TextBlock Text="↶" FontSize="14" Foreground="White" />
+                    </Button>
+                    <Button Style="{StaticResource ToolbarIconButton}" Margin="1,0" ToolTip="Refazer (Ctrl+Y)" Click="BtnRedo_Click">
+                        <TextBlock Text="↷" FontSize="14" Foreground="White" />
+                    </Button>
+                </StackPanel>
+            </Border>
+
+            <!-- ================= BARRA VERTICAL: AÇÕES DA CAPTURA ================= -->
+            <Border x:Name="ActionsToolbar"
+                    Background="{StaticResource BgFloatingGlassBrush}"
+                    BorderBrush="{DynamicResource AccentPrimaryBrush}"
+                    BorderThickness="1"
+                    CornerRadius="10"
+                    Padding="5,6"
+                    Effect="{StaticResource GlassFloatingShadow}"
+                    Visibility="Collapsed"
+                    Panel.ZIndex="1000">
+                <StackPanel Orientation="Vertical">
+                    <!-- Copy to Clipboard (Destaque Principal) -->
+                    <Button Style="{StaticResource PrimaryButtonStyle}" Width="34" Height="34" Margin="0,1" Padding="0" ToolTip="Copiar para Área de Transferência (Ctrl+C)" Click="BtnCopy_Click">
+                        <TextBlock Text="📋" FontSize="14" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                    </Button>
+
+                    <!-- Save to File -->
+                    <Button Style="{StaticResource ToolbarIconButton}" Width="34" Height="32" Margin="0,1" ToolTip="Salvar no Computador (Ctrl+S)" Click="BtnSave_Click">
+                        <TextBlock Text="💾" FontSize="14" Foreground="White" />
+                    </Button>
+
+                    <!-- Fixar na Tela -->
+                    <Button x:Name="BtnPin" Style="{StaticResource ToolbarIconButton}" Width="34" Height="32" Margin="0,1" ToolTip="Fixar na tela (Ctrl+Shift+P)" Click="BtnPin_Click">
+                        <TextBlock Text="📌" FontSize="14" Foreground="{DynamicResource AccentLightBrush}" />
+                    </Button>
+
+                    <Separator Style="{x:Null}" Height="1" Background="#3F3F46" Margin="2,4" />
+
+                    <!-- Perguntar à IA -->
+                    <Button x:Name="BtnAskAi" Style="{StaticResource ToolbarIconButton}" Width="34" Height="32" Margin="0,1" ToolTip="Perguntar à IA" Click="BtnAskAi_Click">
+                        <TextBlock Text="💬" FontSize="14" Foreground="{DynamicResource AccentLightBrush}" />
+                    </Button>
+
+                    <!-- Menu de IA -->
+                    <Button x:Name="BtnAiMenu" Style="{StaticResource ToolbarIconButton}" Width="34" Height="32" Margin="0,1" ToolTip="Menu de IA" Click="BtnAiMenu_Click">
+                        <TextBlock Text="✦" FontSize="15" FontWeight="Bold" Foreground="#F59E0B" />
+                    </Button>
+
+                    <!-- OCR Local -->
+                    <Button Style="{StaticResource ToolbarIconButton}" Width="34" Height="32" Margin="0,1" ToolTip="Extrair texto (OCR)" Click="BtnOcr_Click">
+                        <TextBlock Text="OCR" FontSize="10.5" FontWeight="Bold" Foreground="{DynamicResource AccentLightBrush}" />
+                    </Button>
+
+                    <Separator Style="{x:Null}" Height="1" Background="#3F3F46" Margin="2,4" />
+
+                    <!-- Open in Editor -->
+                    <Button Style="{StaticResource ToolbarIconButton}" Width="34" Height="32" Margin="0,1" ToolTip="Abrir no editor" Click="BtnEditor_Click">
+                        <TextBlock Text="📐" FontSize="14" Foreground="White" />
+                    </Button>
+
+                    <!-- Cancel / Close -->
+                    <Button Style="{StaticResource ToolbarIconButton}" Width="34" Height="32" Margin="0,1" ToolTip="Cancelar (Esc)" Click="BtnCancel_Click">
+                        <TextBlock Text="✕" FontSize="14" Foreground="#EF4444" FontWeight="Bold" />
+                    </Button>
+                </StackPanel>
+            </Border>
+
+            <!-- Precision Visual Cursor Indicator (Customizable Crosshair & Localized Pixel Inversion) -->
+            <Canvas x:Name="VisualCursorIndicator"
+                    Width="80" Height="80"
+                    IsHitTestVisible="False"
+                    Visibility="Collapsed"
+                    Panel.ZIndex="2000">
+                <Image x:Name="CursorInvertImage"
+                       Width="80" Height="80"
+                       IsHitTestVisible="False"
+                       Stretch="None"
+                       SnapsToDevicePixels="True"
+                       RenderOptions.BitmapScalingMode="NearestNeighbor"
+                       Visibility="Visible" />
+                <Path x:Name="CursorOuterPath"
+                      Visibility="Collapsed" />
+                <Path x:Name="CursorInnerPath"
+                      Visibility="Collapsed" />
+            </Canvas>
+
+            <!-- Inline text input box when inserting text -->
+            <TextBox x:Name="InlineTextInput"
+                     Visibility="Collapsed"
+                     Background="#18181B"
+                     Foreground="White"
+                     BorderBrush="{DynamicResource AccentPrimaryBrush}"
+                     BorderThickness="1.5"
+                     FontSize="15"
+                     FontWeight="SemiBold"
+                     Padding="4"
+                     KeyDown="InlineTextInput_KeyDown"
+                     LostFocus="InlineTextInput_LostFocus" />
+
+        </Canvas>
+    </Grid>
+</Window>

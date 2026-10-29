@@ -1,0 +1,74 @@
+## =====================================================================
+## CrankoShot — .gitignore Oficial (.NET 8, WPF, Visual Studio, Windows)
+## =====================================================================
+
+# Compilação e saídas de build
+[Bb]in/
+[Oo]bj/
+[Aa]rms/
+[Aa]rm64/
+[Xx]64/
+[Xx]86/
+
+# Publicação local e instalador gerado
+publish/
+installer_output/
+Output/
+
+# Visual Studio e Rider / VS Code
+.vs/
+.vscode/
+.idea/
+*.user
+*.userosscache
+*.suo
+*.sln.docstates
+*.userprefs
+*.launchSettings.json
+
+# Testes automatizados e relatórios de cobertura
+TestResults/
+[Tt]est[Rr]esults/
+*.trx
+*.coverage
+*.coveragexml
+CoverletSourceRootsMapping_*
+
+# Pacotes e caches NuGet locais
+*.nupkg
+*.snupkg
+**/packages/*
+!**/packages/build/
+project.lock.json
+project.fragment.lock.json
+artifacts/
+
+# Logs e arquivos temporários
+*.log
+*.tmp
+*.bak
+*.orig
+*.swp
+
+# Bancos de dados locais e backups
+*.db
+*.db-shm
+*.db-wal
+*.sqlite
+*.sqlite3
+
+# Arquivos de ambiente e segredos locais (não versionar)
+.env
+.env.local
+.env.*.local
+*.pfx
+*.p12
+*.key
+
+# Sistema operacional (Windows)
+Thumbs.db
+Thumbs.db:encryptable
+ehthumbs.db
+ehthumbs_vista.db
+[Dd]esktop.ini
+$RECYCLE.BIN/

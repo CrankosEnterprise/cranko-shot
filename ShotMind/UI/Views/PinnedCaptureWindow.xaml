@@ -1,0 +1,99 @@
+<Window x:Class="ShotMind.UI.Views.PinnedCaptureWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="CrankoShot — Captura Fixada"
+        WindowStyle="None"
+        AllowsTransparency="True"
+        Background="Transparent"
+        Topmost="True"
+        ShowInTaskbar="False"
+        ResizeMode="CanResizeWithGrip"
+        MinWidth="180" MinHeight="130"
+        PreviewKeyDown="Window_PreviewKeyDown"
+        MouseEnter="Window_MouseEnter"
+        MouseLeave="Window_MouseLeave">
+
+    <Window.Resources>
+        <DropShadowEffect x:Key="PinnedShadow" BlurRadius="22" ShadowDepth="5" Direction="270" Color="#000000" Opacity="0.65"/>
+    </Window.Resources>
+
+    <Border x:Name="OuterBorder"
+            Margin="10"
+            Background="#161620F5"
+            BorderBrush="{DynamicResource AccentPrimaryBrush}"
+            BorderThickness="1.5"
+            CornerRadius="10"
+            Effect="{StaticResource PinnedShadow}">
+        <Grid>
+            <!-- Content Image -->
+            <Image x:Name="ImgPinnedContent"
+                   Stretch="Uniform"
+                   RenderOptions.BitmapScalingMode="HighQuality"
+                   MouseLeftButtonDown="ImgPinnedContent_MouseLeftButtonDown"/>
+
+            <!-- Floating Top Action Bar (Compact on Hover) -->
+            <Border x:Name="FloatingToolbar"
+                    VerticalAlignment="Top"
+                    HorizontalAlignment="Stretch"
+                    Background="{StaticResource BgFloatingGlassBrush}"
+                    BorderBrush="{StaticResource GlassBorderBrush}"
+                    BorderThickness="0,0,0,1"
+                    CornerRadius="9,9,0,0"
+                    Padding="8,4"
+                    Opacity="0.0"
+                    MouseLeftButtonDown="FloatingToolbar_MouseLeftButtonDown">
+                <DockPanel LastChildFill="True">
+                    <!-- Left: Title & Drag Hint -->
+                    <StackPanel Orientation="Horizontal" DockPanel.Dock="Left" VerticalAlignment="Center">
+                        <TextBlock Text="📌" FontSize="11" Margin="2,0,4,0" VerticalAlignment="Center"/>
+                        <TextBlock x:Name="TxtDimensions" Text="CrankoShot Pin" Foreground="{StaticResource TextSecondaryBrush}" FontSize="10.5" FontWeight="SemiBold" VerticalAlignment="Center"/>
+                    </StackPanel>
+
+                    <!-- Right: Quick Action Buttons -->
+                    <StackPanel Orientation="Horizontal" DockPanel.Dock="Right" HorizontalAlignment="Right" VerticalAlignment="Center">
+                        <!-- Toggle Always on Top -->
+                        <Button x:Name="BtnToggleTopmost"
+                                Style="{StaticResource ToolbarIconButton}"
+                                Width="26" Height="24" Margin="1,0"
+                                ToolTip="Alternar Sempre Visível (Fixar/Desafixar)"
+                                Click="BtnToggleTopmost_Click">
+                            <TextBlock x:Name="TxtPinIcon" Text="📌" FontSize="11" Foreground="{DynamicResource AccentLightBrush}"/>
+                        </Button>
+
+                        <!-- Copy -->
+                        <Button Style="{StaticResource ToolbarIconButton}"
+                                Width="26" Height="24" Margin="1,0"
+                                ToolTip="Copiar para Área de Transferência (Ctrl+C)"
+                                Click="BtnCopy_Click">
+                            <TextBlock Text="📋" FontSize="11" Foreground="White"/>
+                        </Button>
+
+                        <!-- Save -->
+                        <Button Style="{StaticResource ToolbarIconButton}"
+                                Width="26" Height="24" Margin="1,0"
+                                ToolTip="Salvar em Arquivo (Ctrl+S)"
+                                Click="BtnSave_Click">
+                            <TextBlock Text="💾" FontSize="11" Foreground="White"/>
+                        </Button>
+
+                        <!-- Open in Editor -->
+                        <Button Style="{StaticResource ToolbarIconButton}"
+                                Width="26" Height="24" Margin="1,0"
+                                ToolTip="Abrir no Editor Completo (Ctrl+E)"
+                                Click="BtnEditor_Click">
+                            <TextBlock Text="📐" FontSize="11" Foreground="White"/>
+                        </Button>
+
+                        <!-- Close Pinned Window -->
+                        <Button Style="{StaticResource ToolbarIconButton}"
+                                Width="26" Height="24" Margin="1,0"
+                                ToolTip="Fechar esta captura fixada (Esc)"
+                                Click="BtnClose_Click">
+                            <TextBlock Text="✕" FontSize="11" FontWeight="Bold" Foreground="#EF4444"/>
+                        </Button>
+                    </StackPanel>
+                </DockPanel>
+            </Border>
+        </Grid>
+    </Border>
+</Window>
