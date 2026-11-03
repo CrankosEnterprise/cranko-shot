@@ -4,8 +4,29 @@
 [![Plataforma](https://img.shields.io/badge/Plataforma-Windows%2010%20%7C%2011-0078D6.svg)](https://www.microsoft.com/windows)
 [![Arquitetura](https://img.shields.io/badge/Arquitetura-x64-green.svg)]()
 [![WPF](https://img.shields.io/badge/UI-WPF%20Glassmorphism-purple.svg)]()
+[![Release](https://img.shields.io/github/v/release/CrankosEnterprise/cranko-shot?label=Vers%C3%A3o%20Oficial&color=8B5CF6)](https://github.com/CrankosEnterprise/cranko-shot/releases/latest)
 
 O **CrankoShot** é um aplicativo desktop moderno para Windows focado em captura ágil de tela, edição visual imediata e análise multimodal através de Inteligência Artificial. Com interface fluida em estilo Glassmorphism, o aplicativo reúne ferramentas completas de anotação vetorial, mira personalizável com inversão localizada de pixels em tempo real, OCR nativo 100% offline e integração independente com os provedores de IA **Google Gemini** e **OpenRouter**.
+
+---
+
+## 📥 Download
+
+Baixe o instalador oficial do **CrankoShot** para Windows:
+
+[![Baixar CrankoShot](https://img.shields.io/badge/⬇%EF%B8%8F%20Baixar-CrankoShot%20para%20Windows-8B5CF6?style=for-the-badge&logo=windows&logoColor=white)](https://github.com/CrankosEnterprise/cranko-shot/releases/latest/download/CrankoShot-Setup.exe)
+
+> **Instalador Oficial:** [`CrankoShot-Setup.exe`](https://github.com/CrankosEnterprise/cranko-shot/releases/latest/download/CrankoShot-Setup.exe)  
+> Pacote completo autônomo (*self-contained* x64) com todas as dependências do .NET 8 embutidas, pronto para instalar e executar.
+>
+> **Compatibilidade do Sistema:**
+> - **Sistemas Operacionais:** Windows 10 (versão 2004 / Build 19041 ou superior) e Windows 11.
+> - **Arquitetura:** x64 (64 bits).
+>
+> 📦 **Versões Disponíveis:**
+> - [Última Versão Estável (Latest)](https://github.com/CrankosEnterprise/cranko-shot/releases/latest)
+> - [Release Inicial v1.0.0](https://github.com/CrankosEnterprise/cranko-shot/releases/tag/v1.0.0)
+> - [Todas as Releases Publicadas](https://github.com/CrankosEnterprise/cranko-shot/releases)
 
 ---
 
@@ -155,8 +176,8 @@ App de Print/
 
 ### 1. Clonar o Repositório
 ```powershell
-git clone https://github.com/seu-usuario/CrankoShot.git
-cd CrankoShot
+git clone https://github.com/CrankosEnterprise/cranko-shot.git
+cd cranko-shot
 ```
 
 ### 2. Compilar a Solução
@@ -199,6 +220,16 @@ O instalador final será gerado em:
 - Configuração de atalho no Menu Iniciar e opção de inicialização automática com o Windows.
 - Criação automática dos diretórios de dados em `%AppData%\ShotMind`.
 - Desinstalador seguro que preserva a pasta de imagens do usuário.
+
+### 🚀 Publicação de Novas Versões no GitHub:
+Para publicar atualizações mantendo os links de download automático operacionais:
+1. **Nome Padronizado:** Mantenha sempre o nome do instalador gerado como `CrankoShot-Setup.exe` (conforme configurado na diretiva `OutputBaseFilename=CrankoShot-Setup` do arquivo `installer.iss`).
+2. **Anexo na Release:** Ao criar uma nova tag/release no GitHub (ex.: `v1.1.0`), anexe o arquivo `installer_output\CrankoShot-Setup.exe` na lista de assets.
+3. **Persistência do Link:** O link principal de download direto:
+   ```
+   https://github.com/CrankosEnterprise/cranko-shot/releases/latest/download/CrankoShot-Setup.exe
+   ```
+   apontará automaticamente para o instalador da nova release assim que ela for publicada, sem exigir nenhuma edição manual no README.
 
 ---
 

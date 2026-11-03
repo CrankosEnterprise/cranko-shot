@@ -21,8 +21,8 @@ Para compilar, depurar e testar o CrankoShot, você precisará de:
 ### 1. Clonar o Repositório e Criar uma Branch
 ```powershell
 # Clone seu fork ou o repositório principal
-git clone https://github.com/seu-usuario/CrankoShot.git
-cd CrankoShot
+git clone https://github.com/CrankosEnterprise/cranko-shot.git
+cd cranko-shot
 
 # Crie uma branch com nome descritivo
 git checkout -b feature/nome-da-funcionalidade
