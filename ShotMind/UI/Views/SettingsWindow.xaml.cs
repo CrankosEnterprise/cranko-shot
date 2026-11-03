@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
@@ -23,6 +23,7 @@ public partial class SettingsWindow : Window
     private bool _isRecordingHotkey = false;
     private string? _recordingActionId = null;
     private bool _isLoadingCrosshairUI = false;
+    private bool _isApplyingScalePreset = false;
     private CrosshairStyle _selectedCrosshairStyle = CrosshairStyle.Simple;
 
     private WriteableBitmap? _previewDarkBmp;
@@ -175,12 +176,27 @@ public partial class SettingsWindow : Window
             TxtCursorColorHex.Text = string.IsNullOrEmpty(s.CursorColor) ? "#8B5CF6" : s.CursorColor;
             UpdateCursorColorPreview(TxtCursorColorHex.Text);
             SetComboBoxItem(CmbCrosshairStyle, (int)_selectedCrosshairStyle);
-            SetComboBoxItem(CmbCursorSize, s.CursorSize switch
+
+            int identifiedPreset = CrosshairService.IdentifyPreset(
+                (int)SliderCrosshairThickness.Value,
+                (int)SliderCrosshairLength.Value,
+                (int)SliderCrosshairGap.Value,
+                (int)SliderCrosshairDotSize.Value);
+
+            int comboIndex = identifiedPreset switch
             {
-                14 => 0,
-                24 => 2,
-                _ => 1 // 18 padrão
-            });
+                CrosshairService.CursorSizeSmall => 0,
+                CrosshairService.CursorSizeNormal => 1,
+                CrosshairService.CursorSizeLarge => 2,
+                _ => s.CursorSize switch
+                {
+                    CrosshairService.CursorSizeSmall => 0,
+                    CrosshairService.CursorSizeNormal => 1,
+                    CrosshairService.CursorSizeLarge => 2,
+                    _ => 3 // Personalizado
+                }
+            };
+            SetComboBoxItem(CmbCursorSize, comboIndex);
         }
         finally
         {
@@ -934,15 +950,75 @@ public partial class SettingsWindow : Window
             TxtCrosshairDotSizeVal.Text = $"{(int)SliderCrosshairDotSize.Value} px";
 
         if (_isLoadingCrosshairUI) return;
+
+        // Ao alterar manualmente qualquer um dos 4 controles:
+        // - Não altera os outros três controles
+        // - Se a combinação coincidir com um preset existente, seleciona esse preset automaticamente
+        // - Caso contrário, muda automaticamente para "Personalizado" (índice 3)
+        if (!_isApplyingScalePreset && CmbCursorSize != null)
+        {
+            int t = (int)Math.Round(SliderCrosshairThickness?.Value ?? 2);
+            int l = (int)Math.Round(SliderCrosshairLength?.Value ?? 12);
+            int g = (int)Math.Round(SliderCrosshairGap?.Value ?? 4);
+            int d = (int)Math.Round(SliderCrosshairDotSize?.Value ?? 3);
+
+            int identified = CrosshairService.IdentifyPreset(t, l, g, d);
+            int targetIdx = identified switch
+            {
+                CrosshairService.CursorSizeSmall => 0,
+                CrosshairService.CursorSizeNormal => 1,
+                CrosshairService.CursorSizeLarge => 2,
+                _ => 3 // Personalizado
+            };
+
+            if (CmbCursorSize.SelectedIndex != targetIdx)
+            {
+                _isLoadingCrosshairUI = true;
+                try
+                {
+                    CmbCursorSize.SelectedIndex = targetIdx;
+                }
+                finally
+                {
+                    _isLoadingCrosshairUI = false;
+                }
+            }
+        }
+
         RefreshCrosshairLivePreview();
     }
 
     private void CmbCursorSize_SelectionChanged(object sender, System.Windows.Controls.SelectionChangedEventArgs e)
     {
-        // A escala rápida é um multiplicador aplicado pelo CrosshairService sobre os valores individuais;
-        // não altera os controles deslizantes (evita aplicar a escala duas vezes).
         if (_isLoadingCrosshairUI || CmbCursorSize == null) return;
-        RefreshCrosshairLivePreview();
+
+        int idx = CmbCursorSize.SelectedIndex;
+        if (idx is >= 0 and <= 2)
+        {
+            var preset = idx switch
+            {
+                0 => CrosshairService.PresetSmall,
+                1 => CrosshairService.PresetNormal,
+                2 => CrosshairService.PresetLarge,
+                _ => CrosshairService.PresetNormal
+            };
+
+            _isApplyingScalePreset = true;
+            try
+            {
+                if (SliderCrosshairThickness != null) SliderCrosshairThickness.Value = preset.Thickness;
+                if (SliderCrosshairLength != null) SliderCrosshairLength.Value = preset.Length;
+                if (SliderCrosshairGap != null) SliderCrosshairGap.Value = preset.Gap;
+                if (SliderCrosshairDotSize != null) SliderCrosshairDotSize.Value = preset.DotSize;
+            }
+            finally
+            {
+                _isApplyingScalePreset = false;
+            }
+
+            RefreshCrosshairLivePreview();
+        }
+        // idx == 3 ("Personalizado"): apenas representa a geometria manual definida pelo usuário, não altera controles.
     }
 
     private void UpdateCursorControlsState()
@@ -959,9 +1035,11 @@ public partial class SettingsWindow : Window
         }
 
         bool isCenterDotOnly = _selectedCrosshairStyle == CrosshairStyle.CenterDot;
+        bool isSimple = _selectedCrosshairStyle == CrosshairStyle.Simple;
+
         if (SliderCrosshairLength != null) SliderCrosshairLength.IsEnabled = !isCenterDotOnly;
         if (SliderCrosshairThickness != null) SliderCrosshairThickness.IsEnabled = !isCenterDotOnly;
-        if (SliderCrosshairGap != null) SliderCrosshairGap.IsEnabled = !isCenterDotOnly && _selectedCrosshairStyle != CrosshairStyle.Closed;
+        if (SliderCrosshairGap != null) SliderCrosshairGap.IsEnabled = !isCenterDotOnly && !isSimple;
 
         if (ChkCrosshairShowDot != null)
         {
@@ -987,9 +1065,10 @@ public partial class SettingsWindow : Window
             CrosshairOutline = ChkCrosshairOutline?.IsChecked == true,
             CursorSize = CmbCursorSize?.SelectedIndex switch
             {
-                0 => 14,
-                2 => 24,
-                _ => 18
+                0 => CrosshairService.CursorSizeSmall,
+                1 => CrosshairService.CursorSizeNormal,
+                2 => CrosshairService.CursorSizeLarge,
+                _ => CrosshairService.CursorSizeCustom
             }
         };
 
@@ -1633,9 +1712,10 @@ public partial class SettingsWindow : Window
             }
             s.CursorSize = CmbCursorSize.SelectedIndex switch
             {
-                0 => 14,
-                2 => 24,
-                _ => 18
+                0 => CrosshairService.CursorSizeSmall,
+                1 => CrosshairService.CursorSizeNormal,
+                2 => CrosshairService.CursorSizeLarge,
+                _ => CrosshairService.CursorSizeCustom
             };
 
             // IA

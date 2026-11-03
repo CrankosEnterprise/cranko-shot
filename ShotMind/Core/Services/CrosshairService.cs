@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Windows;
 using System.Windows.Media;
 using ShotMind.Core.Models;
@@ -14,26 +14,51 @@ public static class CrosshairService
     public const byte PixelStroke = 1;
     public const byte PixelOutline = 2;
 
+    // Presets oficiais de escala rápida: cada um define um conjunto completo e independente de 4 dimensões
+    public const int CursorSizeSmall = 14;
+    public const int CursorSizeNormal = 18;
+    public const int CursorSizeLarge = 24;
+    public const int CursorSizeCustom = 0;
+
+    public static readonly (int Thickness, int Length, int Gap, int DotSize) PresetSmall = (1, 8, 3, 2);
+    public static readonly (int Thickness, int Length, int Gap, int DotSize) PresetNormal = (2, 12, 4, 3);
+    public static readonly (int Thickness, int Length, int Gap, int DotSize) PresetLarge = (3, 18, 6, 5);
+
+    public static bool MatchesPreset(int thickness, int length, int gap, int dotSize, (int Thickness, int Length, int Gap, int DotSize) preset)
+    {
+        return thickness == preset.Thickness &&
+               length == preset.Length &&
+               gap == preset.Gap &&
+               dotSize == preset.DotSize;
+    }
+
+    public static int IdentifyPreset(int thickness, int length, int gap, int dotSize)
+    {
+        if (MatchesPreset(thickness, length, gap, dotSize, PresetSmall)) return CursorSizeSmall;
+        if (MatchesPreset(thickness, length, gap, dotSize, PresetNormal)) return CursorSizeNormal;
+        if (MatchesPreset(thickness, length, gap, dotSize, PresetLarge)) return CursorSizeLarge;
+        return CursorSizeCustom;
+    }
+
     public static string GetStyleDisplayName(CrosshairStyle style) => style switch
     {
         CrosshairStyle.Simple => "Mira simples",
         CrosshairStyle.Open => "Mira aberta",
         CrosshairStyle.Closed => "Mira fechada",
-        CrosshairStyle.CenterDot => "Mira com ponto central",
-        CrosshairStyle.LinesAndDot => "Mira com linhas e ponto",
+        CrosshairStyle.CenterDot => "Ponto central",
+        CrosshairStyle.LinesAndDot => "Linhas + Ponto",
         _ => "Mira simples"
     };
 
     public static string GetStyleDescription(CrosshairStyle style) => style switch
     {
-        CrosshairStyle.Simple => "Aparência equilibrada semelhante à mira padrão clássica.",
-        CrosshairStyle.Open => "Linhas separadas com vão central livre, sem ponto central.",
-        CrosshairStyle.Closed => "Linhas contínuas cruzadas formando uma mira fechada.",
-        CrosshairStyle.CenterDot => "Foco minimalista apenas no ponto central de precisão.",
-        CrosshairStyle.LinesAndDot => "Linhas separadas combinadas com ponto central de precisão.",
+        CrosshairStyle.Simple => "Mira minimalista clássica contínua sem vão central.",
+        CrosshairStyle.Open => "Quatro segmentos separados com vão central livre, sem linhas no centro.",
+        CrosshairStyle.Closed => "Estrutura fechada com contorno delimitador conectado aos braços externos.",
+        CrosshairStyle.CenterDot => "Ponto central de alta precisão exatamente no pixel do cursor.",
+        CrosshairStyle.LinesAndDot => "Quatro segmentos separados combinados com ponto central de precisão.",
         _ => string.Empty
     };
-
 
     /// <summary>
     /// Maior distância (em pixels, a partir do centro) que as linhas podem ocupar dentro da grade 80x80.
@@ -41,43 +66,36 @@ public static class CrosshairService
     private const int MaxExtent = 37;
 
     /// <summary>
-    /// Multiplicador proporcional da "Escala rápida" (valor persistido em <see cref="AppSettings.CursorSize"/>).
+    /// Multiplicador informativo mantido para compatibilidade. As escalas rápidas são conjuntos
+    /// predefinidos completos que atribuem valores diretamente a cada um dos quatro controles.
     /// </summary>
     public static double GetScaleMultiplier(int cursorSize) => cursorSize switch
     {
-        14 => 0.75,
-        24 => 1.5,
+        CursorSizeSmall => 0.75,
+        CursorSizeLarge => 1.5,
         _ => 1.0
     };
 
-    private static int ScaleValue(int value, double multiplier, int min)
-        => Math.Max(min, (int)Math.Round(value * multiplier, MidpointRounding.AwayFromZero));
-
     /// <summary>
-    /// Geometria efetiva (em pixels) após aplicar a escala rápida UMA única vez sobre todos os
-    /// elementos: espessura, comprimento, abertura central e tamanho do ponto.
+    /// Retorna a geometria efetiva (em pixels) diretamente a partir dos parâmetros configurados,
+    /// garantindo consistência total entre os controles da interface, a prévia e a captura.
     /// </summary>
     public static (int Thickness, int Length, int Gap, int DotSize) GetScaledGeometry(AppSettings settings)
     {
         settings ??= new AppSettings();
-        double m = GetScaleMultiplier(settings.CursorSize);
 
         int thickness = Math.Clamp(settings.CrosshairThickness <= 0 ? 2 : settings.CrosshairThickness, 1, 6);
         int length = Math.Clamp(settings.CrosshairLength <= 0 ? 12 : settings.CrosshairLength, 4, 28);
         int gap = Math.Clamp(settings.CrosshairGap < 0 ? 4 : settings.CrosshairGap, 0, 14);
         int dot = Math.Clamp(settings.CrosshairDotSize <= 0 ? 3 : settings.CrosshairDotSize, 1, 10);
 
-        return (
-            ScaleValue(thickness, m, 1),
-            ScaleValue(length, m, 1),
-            ScaleValue(gap, m, gap > 0 ? 1 : 0),
-            ScaleValue(dot, m, 1));
+        return (thickness, length, gap, dot);
     }
 
     /// <summary>
     /// Builds an 80x80 classification mask for the configured crosshair geometry.
     /// 0 = transparent, 1 = crosshair stroke/dot pixel, 2 = 1px outline pixel.
-    /// A escala rápida (CursorSize) é aplicada aqui, uma única vez, para a prévia e para a mira real.
+    /// Utilizado identicamente pela prévia e pela mira real durante a captura.
     /// </summary>
     public static byte[] BuildMask(AppSettings settings)
     {
@@ -96,10 +114,9 @@ public static class CrosshairService
     }
 
     /// <summary>
-    /// Todos os elementos são desenhados em torno de um único pivô (o pixel central da grade quando a
-    /// espessura é ímpar, ou o par de pixels centrais quando é par). O ponto central adota a mesma
-    /// paridade das linhas, e os braços usam a distância simétrica ao pivô, garantindo simetria
-    /// perfeita e centralização exata.
+    /// Todos os elementos são desenhados em torno de um único pivô no centro da grade 80x80
+    /// (GridCenter = 40). O ponto central e os braços usam o alinhamento exato ao pivô, garantindo
+    /// simetria perfeita e posicionamento pixel-perfect sobre o cursor.
     /// </summary>
     public static byte[] BuildMask(
         CrosshairStyle style,
@@ -117,7 +134,7 @@ public static class CrosshairService
         gap = Math.Clamp(gap, 0, 60);
         dotSize = Math.Clamp(dotSize, 1, 20);
 
-        // Dentro da grade 80x80: se exceder o limite, reduz TODAS as dimensões na mesma proporção.
+        // Dentro da grade 80x80: se exceder o limite, reduz as dimensões na mesma proporção.
         if (gap + length > MaxExtent)
         {
             double f = MaxExtent / (double)(gap + length);
@@ -135,30 +152,34 @@ public static class CrosshairService
             _ => showDot
         };
 
-        // Pivô único: paridade da espessura quando há linhas; do próprio ponto quando é só o ponto.
+        // Pivô único no centro exato da grade:
+        // Paridade da espessura quando há linhas; da paridade do ponto quando é só o ponto.
         bool evenPivot = drawLines ? thickness % 2 == 0 : dotSize % 2 == 0;
         double cc = GridCenter + (evenPivot ? 0.5 : 0.0);
 
-        // O ponto precisa ter a mesma paridade do pivô para ficar exatamente centralizado nas linhas.
+        // O ponto tem a mesma paridade do pivô para garantir alinhamento exato com as linhas e o cursor
         int dotEff = dotSize;
         if (drawLines && (dotEff % 2 == 0) != evenPivot)
         {
             dotEff++;
         }
 
-        // Com ponto central, as linhas começam depois dele, deixando ao menos 1 pixel livre.
-        int effectiveGap = gap;
-        if (drawCenterDot && drawLines && style != CrosshairStyle.Closed)
-        {
-            int dotMaxK = ((dotEff + 1) / 2) - 1;
-            effectiveGap = Math.Max(gap, dotMaxK + 2);
-        }
-
         double halfBand = (thickness - 1) / 2.0 + 1e-6;
-        int closedExtentK = effectiveGap + length - 1;
         double dotHalfSquare = (dotEff - 1) / 2.0 + 1e-6;
         double dotRadius = dotEff / 2.0 + 0.15;
         double dotRadiusSq = dotRadius * dotRadius;
+
+        // Vão central efetivo para mira aberta e linhas+ponto
+        int effectiveGap = Math.Max(1, gap);
+        if (drawCenterDot && drawLines && style == CrosshairStyle.LinesAndDot)
+        {
+            int dotRadiusK = (dotEff + 1) / 2;
+            effectiveGap = Math.Max(gap, dotRadiusK + 1);
+        }
+
+        // Para a estrutura fechada (CrosshairStyle.Closed)
+        int boxExtent = Math.Clamp(effectiveGap, 2, 14);
+        int halfBandInt = (int)Math.Ceiling(halfBand);
 
         for (int y = 1; y < GridSize - 1; y++)
         {
@@ -176,22 +197,43 @@ public static class CrosshairService
 
                 if (drawLines)
                 {
-                    if (style == CrosshairStyle.Closed)
+                    switch (style)
                     {
-                        stroke = (inBandX && ky <= closedExtentK) || (inBandY && kx <= closedExtentK);
-                    }
-                    else
-                    {
-                        stroke = (inBandX && ky >= effectiveGap && ky < effectiveGap + length)
-                              || (inBandY && kx >= effectiveGap && kx < effectiveGap + length);
+                        case CrosshairStyle.Simple:
+                            // Mira Simples: cruz minimalista pura contínua cruzando no centro geométrico sem gap
+                            stroke = (inBandX && ky <= length) || (inBandY && kx <= length);
+                            break;
+
+                        case CrosshairStyle.Open:
+                            // Mira Aberta: quatro segmentos separados com abertura central completamente vazia
+                            stroke = (inBandX && ky >= effectiveGap && ky < effectiveGap + length)
+                                  || (inBandY && kx >= effectiveGap && kx < effectiveGap + length);
+                            break;
+
+                        case CrosshairStyle.Closed:
+                            // Mira Fechada: linhas conectadas formando uma estrutura fechada
+                            // (quadrado central fechado de raio boxExtent + quatro braços externos conectados)
+                            bool inBoxH = (Math.Abs(ky - boxExtent) <= halfBand) && (kx <= boxExtent + halfBandInt);
+                            bool inBoxV = (Math.Abs(kx - boxExtent) <= halfBand) && (ky <= boxExtent + halfBandInt);
+                            bool inArmOutY = inBandX && (ky >= boxExtent && ky < boxExtent + length);
+                            bool inArmOutX = inBandY && (kx >= boxExtent && kx < boxExtent + length);
+                            stroke = inBoxH || inBoxV || inArmOutX || inArmOutY;
+                            break;
+
+                        case CrosshairStyle.LinesAndDot:
+                            // Linhas + Ponto: quatro segmentos separados com ponto de precisão central
+                            stroke = (inBandX && ky >= effectiveGap && ky < effectiveGap + length)
+                                  || (inBandY && kx >= effectiveGap && kx < effectiveGap + length);
+                            break;
                     }
                 }
 
+                // Ponto central de precisão
                 if (!stroke && drawCenterDot)
                 {
-                    stroke = dotEff <= 3
+                    stroke = dotEff <= 4
                         ? Math.Abs(dx) <= dotHalfSquare && Math.Abs(dy) <= dotHalfSquare
-                        : dx * dx + dy * dy <= dotRadiusSq;
+                        : (dx * dx + dy * dy) <= dotRadiusSq;
                 }
 
                 if (stroke)

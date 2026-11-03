@@ -510,25 +510,25 @@
                                 <TextBlock Text="Selecione o formato estrutural da mira exibida durante a seleção da área de captura." Foreground="{StaticResource TextSecondaryBrush}" FontSize="12.5" TextWrapping="Wrap" Margin="0,0,0,12"/>
 
                                 <UniformGrid Columns="5" Margin="0,0,0,10">
-                                    <Button x:Name="BtnCrosshairSimple" Style="{StaticResource ChipButtonStyle}" Height="58" Padding="4,4" Margin="0,0,6,0" Click="BtnCrosshairStyle_Click" Tag="Simple" ToolTip="Mira simples com aparência semelhante à padrão">
+                                    <Button x:Name="BtnCrosshairSimple" Style="{StaticResource ChipButtonStyle}" Height="58" Padding="4,4" Margin="0,0,6,0" Click="BtnCrosshairStyle_Click" Tag="Simple" ToolTip="Mira simples minimalista contínua">
                                         <StackPanel HorizontalAlignment="Center">
                                             <TextBlock Text="✛" FontSize="17" HorizontalAlignment="Center" Margin="0,0,0,2"/>
                                             <TextBlock Text="Simples" FontSize="11" HorizontalAlignment="Center" TextAlignment="Center" TextWrapping="Wrap"/>
                                         </StackPanel>
                                     </Button>
-                                    <Button x:Name="BtnCrosshairOpen" Style="{StaticResource ChipButtonStyle}" Height="58" Padding="4,4" Margin="0,0,6,0" Click="BtnCrosshairStyle_Click" Tag="Open" ToolTip="Mira aberta: linhas separadas, sem ponto central">
+                                    <Button x:Name="BtnCrosshairOpen" Style="{StaticResource ChipButtonStyle}" Height="58" Padding="4,4" Margin="0,0,6,0" Click="BtnCrosshairStyle_Click" Tag="Open" ToolTip="Mira aberta: quatro segmentos separados com centro livre">
                                         <StackPanel HorizontalAlignment="Center">
                                             <TextBlock Text="⛶" FontSize="16" HorizontalAlignment="Center" Margin="0,0,0,2"/>
                                             <TextBlock Text="Aberta" FontSize="11" HorizontalAlignment="Center" TextAlignment="Center" TextWrapping="Wrap"/>
                                         </StackPanel>
                                     </Button>
-                                    <Button x:Name="BtnCrosshairClosed" Style="{StaticResource ChipButtonStyle}" Height="58" Padding="4,4" Margin="0,0,6,0" Click="BtnCrosshairStyle_Click" Tag="Closed" ToolTip="Mira fechada: linhas formando uma cruz contínua">
+                                    <Button x:Name="BtnCrosshairClosed" Style="{StaticResource ChipButtonStyle}" Height="58" Padding="4,4" Margin="0,0,6,0" Click="BtnCrosshairStyle_Click" Tag="Closed" ToolTip="Mira fechada: linhas conectadas formando estrutura fechada">
                                         <StackPanel HorizontalAlignment="Center">
                                             <TextBlock Text="✚" FontSize="16" HorizontalAlignment="Center" Margin="0,0,0,2"/>
                                             <TextBlock Text="Fechada" FontSize="11" HorizontalAlignment="Center" TextAlignment="Center" TextWrapping="Wrap"/>
                                         </StackPanel>
                                     </Button>
-                                    <Button x:Name="BtnCrosshairCenterDot" Style="{StaticResource ChipButtonStyle}" Height="58" Padding="4,4" Margin="0,0,6,0" Click="BtnCrosshairStyle_Click" Tag="CenterDot" ToolTip="Mira com ponto central">
+                                    <Button x:Name="BtnCrosshairCenterDot" Style="{StaticResource ChipButtonStyle}" Height="58" Padding="4,4" Margin="0,0,6,0" Click="BtnCrosshairStyle_Click" Tag="CenterDot" ToolTip="Ponto central de alta precisão">
                                         <StackPanel HorizontalAlignment="Center">
                                             <TextBlock Text="⊙" FontSize="17" HorizontalAlignment="Center" Margin="0,0,0,2"/>
                                             <TextBlock Text="Ponto Central" FontSize="10.5" HorizontalAlignment="Center" TextAlignment="Center" TextWrapping="Wrap"/>
@@ -544,9 +544,9 @@
 
                                 <!-- Dropdown sincronizado também disponível para acessibilidade -->
                                 <ComboBox x:Name="CmbCrosshairStyle" Height="36" HorizontalAlignment="Stretch" SelectionChanged="CmbCrosshairStyle_SelectionChanged">
-                                    <ComboBoxItem Content="Mira simples (semelhante à padrão atual)" />
+                                    <ComboBoxItem Content="Mira simples (minimalista contínua)" />
                                     <ComboBoxItem Content="Mira aberta (linhas separadas, sem ponto central)" />
-                                    <ComboBoxItem Content="Mira fechada (linhas formando uma cruz contínua)" />
+                                    <ComboBoxItem Content="Mira fechada (estrutura conectada fechada)" />
                                     <ComboBoxItem Content="Mira com ponto central" />
                                     <ComboBoxItem Content="Mira com linhas e ponto central" />
                                 </ComboBox>
@@ -696,7 +696,7 @@
 
                                 <Separator Background="{StaticResource BorderBrush}" Margin="0,0,0,12"/>
 
-                                <!-- Escala rápida: multiplicador proporcional de TODAS as dimensões (espessura, comprimento, abertura e ponto) -->
+                                <!-- Escala rápida: presets completos de dimensões (espessura, comprimento, abertura e ponto) -->
                                 <Grid>
                                     <Grid.ColumnDefinitions>
                                         <ColumnDefinition Width="Auto"/>
@@ -704,12 +704,13 @@
                                     </Grid.ColumnDefinitions>
                                     <TextBlock Grid.Column="0" Text="Escala rápida da mira:" Foreground="{StaticResource TextSecondaryBrush}" FontSize="12.5" VerticalAlignment="Center" Margin="0,0,12,0"/>
                                     <ComboBox Grid.Column="1" x:Name="CmbCursorSize" Height="36" HorizontalAlignment="Stretch" SelectionChanged="CmbCursorSize_SelectionChanged">
-                                        <ComboBoxItem Content="Compacto (0,75×)"/>
-                                        <ComboBoxItem Content="Normal — Padrão (1×)"/>
-                                        <ComboBoxItem Content="Grande (1,5×)"/>
+                                        <ComboBoxItem Content="Pequena"/>
+                                        <ComboBoxItem Content="Normal (Padrão)"/>
+                                        <ComboBoxItem Content="Grande"/>
+                                        <ComboBoxItem Content="Personalizado"/>
                                     </ComboBox>
                                 </Grid>
-                                <TextBlock Text="A escala multiplica proporcionalmente espessura, comprimento, abertura central e ponto central, sobre os valores definidos acima." Foreground="{StaticResource TextMutedBrush}" FontSize="11.5" TextWrapping="Wrap" Margin="0,8,0,0"/>
+                                <TextBlock Text="Selecione um conjunto predefinido de dimensões (Pequena, Normal ou Grande) ou personalize individualmente cada controle acima." Foreground="{StaticResource TextMutedBrush}" FontSize="11.5" TextWrapping="Wrap" Margin="0,8,0,0"/>
                             </StackPanel>
                         </Border>
                     </StackPanel>

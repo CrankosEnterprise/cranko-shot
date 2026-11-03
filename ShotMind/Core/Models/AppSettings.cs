@@ -58,8 +58,8 @@ public class AppSettings
     // Cursor e Seleção (Mira)
     public bool AutoContrastCursor { get; set; } = true;
     public string CursorColor { get; set; } = "#8B5CF6";
-    public int CursorSize { get; set; } = 18; // Escala rápida (multiplicador): 14 = 0,75x, 18 = 1x, 24 = 1,5x
-    public int CrosshairScaleVersion { get; set; } = 0; // 0 = formato antigo (escala alterava só o comprimento)
+    public int CursorSize { get; set; } = 18; // Escala: 14 = Pequena, 18 = Normal, 24 = Grande, 0 = Personalizado
+    public int CrosshairScaleVersion { get; set; } = 2; // 2 = presets completos de 4 dimensões
     public CrosshairStyle CrosshairStyle { get; set; } = CrosshairStyle.Simple;
     public int CrosshairThickness { get; set; } = 2;
     public int CrosshairLength { get; set; } = 12;

@@ -85,17 +85,35 @@ public class SettingsService
         s.SequenceDigits = Math.Clamp(s.SequenceDigits, 1, 6);
         if (s.SequenceCounter < 0) s.SequenceCounter = 0;
         s.ObfuscationIntensity = Math.Clamp(s.ObfuscationIntensity, 2, 64);
-        if (s.CursorSize is not (14 or 18 or 24)) s.CursorSize = 18;
-        if (s.CrosshairScaleVersion < 1)
+        if (s.CursorSize is not (CrosshairService.CursorSizeSmall or CrosshairService.CursorSizeNormal or CrosshairService.CursorSizeLarge or CrosshairService.CursorSizeCustom))
         {
-            // Migração: antes a escala rápida sobrescrevia o comprimento (9 / 18). Agora ela é um
-            // multiplicador de todas as dimensões, então o comprimento volta ao valor-base para
-            // não aplicar a escala duas vezes.
-            if ((s.CursorSize == 14 && s.CrosshairLength == 9) || (s.CursorSize == 24 && s.CrosshairLength == 18))
+            s.CursorSize = CrosshairService.CursorSizeNormal;
+        }
+        if (s.CrosshairScaleVersion < 2)
+        {
+            // Migração: cada escala é um conjunto completo e independente de 4 dimensões
+            if (s.CursorSize == CrosshairService.CursorSizeSmall)
             {
-                s.CrosshairLength = 12;
+                s.CrosshairThickness = CrosshairService.PresetSmall.Thickness;
+                s.CrosshairLength = CrosshairService.PresetSmall.Length;
+                s.CrosshairGap = CrosshairService.PresetSmall.Gap;
+                s.CrosshairDotSize = CrosshairService.PresetSmall.DotSize;
             }
-            s.CrosshairScaleVersion = 1;
+            else if (s.CursorSize == CrosshairService.CursorSizeLarge)
+            {
+                s.CrosshairThickness = CrosshairService.PresetLarge.Thickness;
+                s.CrosshairLength = CrosshairService.PresetLarge.Length;
+                s.CrosshairGap = CrosshairService.PresetLarge.Gap;
+                s.CrosshairDotSize = CrosshairService.PresetLarge.DotSize;
+            }
+            else if (s.CursorSize == CrosshairService.CursorSizeNormal)
+            {
+                s.CrosshairThickness = CrosshairService.PresetNormal.Thickness;
+                s.CrosshairLength = CrosshairService.PresetNormal.Length;
+                s.CrosshairGap = CrosshairService.PresetNormal.Gap;
+                s.CrosshairDotSize = CrosshairService.PresetNormal.DotSize;
+            }
+            s.CrosshairScaleVersion = 2;
         }
         s.CaptureSoundVolume = Math.Clamp(s.CaptureSoundVolume, 0, 100);
         if (string.IsNullOrWhiteSpace(s.CaptureSoundId)) s.CaptureSoundId = "system";

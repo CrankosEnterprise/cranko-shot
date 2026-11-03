@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Drawing;
 using System.IO;
@@ -747,9 +747,11 @@ public class ShotMindTests
         Assert.AreEqual(CrosshairService.PixelEmpty, openMask[centerIdx], "Open crosshair center should be empty when showDot is false.");
         Assert.AreEqual(CrosshairService.PixelStroke, openMask[(CrosshairService.GridCenter - 8) * CrosshairService.GridSize + CrosshairService.GridCenter], "Open crosshair top arm should have stroke.");
 
-        // 2. Closed crosshair -> continuous cross through center
+        // 2. Closed crosshair -> connected closed structure (box walls + connected arms; center interior empty when showDot is false)
         var closedMask = CrosshairService.BuildMask(CrosshairStyle.Closed, thickness: 2, length: 12, gap: 4, dotSize: 3, showDot: false, showOutline: false);
-        Assert.AreEqual(CrosshairService.PixelStroke, closedMask[centerIdx], "Closed crosshair must intersect at the center.");
+        Assert.AreEqual(CrosshairService.PixelEmpty, closedMask[centerIdx], "Closed crosshair interior center should be clear when showDot is false.");
+        Assert.AreEqual(CrosshairService.PixelStroke, closedMask[(CrosshairService.GridCenter - 4) * CrosshairService.GridSize + CrosshairService.GridCenter], "Closed crosshair top wall must have stroke.");
+        Assert.AreEqual(CrosshairService.PixelStroke, closedMask[(CrosshairService.GridCenter - 8) * CrosshairService.GridSize + CrosshairService.GridCenter], "Closed crosshair connected arm must have stroke.");
 
         // 3. CenterDot crosshair -> center has dot, outer arms are empty
         var dotMask = CrosshairService.BuildMask(CrosshairStyle.CenterDot, thickness: 2, length: 12, gap: 4, dotSize: 4, showDot: true, showOutline: false);
@@ -762,8 +764,9 @@ public class ShotMindTests
         Assert.AreEqual(CrosshairService.PixelEmpty, linesAndDotMask[(CrosshairService.GridCenter - 3) * CrosshairService.GridSize + CrosshairService.GridCenter], "LinesAndDot must keep gap between dot and arms.");
         Assert.AreEqual(CrosshairService.PixelStroke, linesAndDotMask[(CrosshairService.GridCenter - 10) * CrosshairService.GridSize + CrosshairService.GridCenter], "LinesAndDot must draw outer arms.");
 
-        // 5. Simple crosshair -> classic balanced cross
+        // 5. Simple crosshair -> minimalist continuous cross crossing at the center
         var simpleMask = CrosshairService.BuildMask(CrosshairStyle.Simple, thickness: 2, length: 12, gap: 4, dotSize: 3, showDot: false, showOutline: true);
+        Assert.AreEqual(CrosshairService.PixelStroke, simpleMask[centerIdx], "Simple crosshair must intersect directly at the center.");
         Assert.AreEqual(CrosshairService.PixelStroke, simpleMask[(CrosshairService.GridCenter - 8) * CrosshairService.GridSize + CrosshairService.GridCenter]);
     }
 
@@ -1250,65 +1253,75 @@ public class ShotMindTests
         int c = CrosshairService.GridCenter;
         int Count(byte[] m) => m.Count(b => b == CrosshairService.PixelStroke);
 
+        // 1. Mira Simples: Minimalista clássica contínua sem vão central (interseção no centro c, c)
         var simple = CrosshairService.BuildMask(CrosshairStyle.Simple, 1, 10, 4, 3, false, false);
-        Assert.IsFalse(MaskPixel(simple, c, c));
-        Assert.IsTrue(MaskPixel(simple, c, c - 4));
+        Assert.IsTrue(MaskPixel(simple, c, c), "Mira simples deve ter traço contínuo no centro.");
+        Assert.IsTrue(MaskPixel(simple, c, c - 4), "Mira simples deve ter traço no braço.");
 
-        var open = CrosshairService.BuildMask(CrosshairStyle.Open, 1, 10, 4, 3, true, false);
-        // Mesmo com o interruptor do ponto ligado, o ponto só aparece se solicitado; aqui há ponto e braços afastados
-        Assert.IsTrue(MaskPixel(open, c, c));
+        // 2. Mira Aberta: Quatro segmentos separados; miolo central vazio (sem ponto quando showDot=false)
+        var open = CrosshairService.BuildMask(CrosshairStyle.Open, 1, 10, 4, 3, false, false);
+        Assert.IsFalse(MaskPixel(open, c, c), "Mira aberta não deve ter nada no centro.");
+        Assert.IsFalse(MaskPixel(open, c, c - 2), "Mira aberta deve ter vão livre no centro.");
+        Assert.IsTrue(MaskPixel(open, c, c - 5), "Mira aberta deve ter braços após o vão.");
 
+        // 3. Mira Fechada: Estrutura fechada conectada (paredes da caixa + braços externos conectados)
         var closed = CrosshairService.BuildMask(CrosshairStyle.Closed, 1, 10, 4, 3, false, false);
-        for (int i = -13; i <= 13; i++)
-        {
-            Assert.IsTrue(MaskPixel(closed, c, c + i) && MaskPixel(closed, c + i, c), $"cruz contínua deve cobrir k={i}");
-        }
-        Assert.IsFalse(MaskPixel(closed, c + 1, c + 1));
+        Assert.IsFalse(MaskPixel(closed, c, c), "Interior central da caixa fechada fica livre por padrão.");
+        Assert.IsTrue(MaskPixel(closed, c, c - 4), "Parede superior da caixa fechada deve ter traço.");
+        Assert.IsTrue(MaskPixel(closed, c - 4, c), "Parede esquerda da caixa fechada deve ter traço.");
+        Assert.IsTrue(MaskPixel(closed, c, c - 8), "Braço superior conectado à caixa deve ter traço.");
 
+        // 4. Ponto Central: Foco exclusivo no ponto central, sem desenhar braços
         var dotOnly = CrosshairService.BuildMask(CrosshairStyle.CenterDot, 1, 10, 4, 5, true, false);
-        Assert.IsTrue(MaskPixel(dotOnly, c, c));
-        Assert.IsFalse(MaskPixel(dotOnly, c, c - 10));
-        Assert.IsTrue(Count(dotOnly) < 30, "CenterDot não pode desenhar linhas");
+        Assert.IsTrue(MaskPixel(dotOnly, c, c), "Ponto central deve estar ativo no centro.");
+        Assert.IsFalse(MaskPixel(dotOnly, c, c - 10), "Ponto central não deve desenhar braços.");
+        Assert.IsTrue(Count(dotOnly) < 30, "CenterDot não pode desenhar linhas.");
 
-        var linesAndDot = CrosshairService.BuildMask(CrosshairStyle.LinesAndDot, 1, 10, 6, 3, false, false);
-        Assert.IsTrue(MaskPixel(linesAndDot, c, c), "ponto central presente");
-        Assert.IsFalse(MaskPixel(linesAndDot, c, c - 3), "separação entre ponto e braços");
-        Assert.IsTrue(MaskPixel(linesAndDot, c, c - 6), "braços após o vão");
+        // 5. Linhas + Ponto: Ponto central presente e braços separados por vão livre
+        var linesAndDot = CrosshairService.BuildMask(CrosshairStyle.LinesAndDot, 1, 10, 6, 3, true, false);
+        Assert.IsTrue(MaskPixel(linesAndDot, c, c), "Ponto central presente no centro geométrico.");
+        Assert.IsFalse(MaskPixel(linesAndDot, c, c - 3), "Vão livre entre o ponto e os braços.");
+        Assert.IsTrue(MaskPixel(linesAndDot, c, c - 6), "Braços após o vão.");
     }
 
     [TestMethod]
-    public void Crosshair_QuickScale_IsProportionalMultiplierOnAllElementsWithoutDoubleApplication()
+    public void Crosshair_PresetsAndCustomScale_CompleteFourDimensionsAndAutoDetection()
     {
-        var baseSettings = new AppSettings
+        // 1. Cada preset define individualmente as 4 dimensões completas
+        Assert.AreEqual((1, 8, 3, 2), CrosshairService.PresetSmall);
+        Assert.AreEqual((2, 12, 4, 3), CrosshairService.PresetNormal);
+        Assert.AreEqual((3, 18, 6, 5), CrosshairService.PresetLarge);
+
+        // 2. IdentifyPreset identifica automaticamente cada preset correto
+        Assert.AreEqual(CrosshairService.CursorSizeSmall, CrosshairService.IdentifyPreset(1, 8, 3, 2));
+        Assert.AreEqual(CrosshairService.CursorSizeNormal, CrosshairService.IdentifyPreset(2, 12, 4, 3));
+        Assert.AreEqual(CrosshairService.CursorSizeLarge, CrosshairService.IdentifyPreset(3, 18, 6, 5));
+
+        // 3. Modificação em qualquer um dos 4 parâmetros passa automaticamente para Personalizado (0)
+        Assert.AreEqual(CrosshairService.CursorSizeCustom, CrosshairService.IdentifyPreset(2, 8, 3, 2), "Mudança de espessura deve ser personalizada");
+        Assert.AreEqual(CrosshairService.CursorSizeCustom, CrosshairService.IdentifyPreset(1, 15, 3, 2), "Mudança de comprimento deve ser personalizada");
+        Assert.AreEqual(CrosshairService.CursorSizeCustom, CrosshairService.IdentifyPreset(1, 8, 6, 2), "Mudança de gap deve ser personalizada");
+        Assert.AreEqual(CrosshairService.CursorSizeCustom, CrosshairService.IdentifyPreset(1, 8, 3, 7), "Mudança de ponto deve ser personalizada");
+
+        // 4. Geometria configurada é retornada diretamente sem multiplicadores ocultos
+        var customSettings = new AppSettings
         {
-            CrosshairStyle = CrosshairStyle.LinesAndDot,
-            CrosshairThickness = 2,
-            CrosshairLength = 12,
-            CrosshairGap = 4,
-            CrosshairDotSize = 3,
-            CrosshairOutline = false,
-            CursorSize = 18
+            CrosshairThickness = 4,
+            CrosshairLength = 16,
+            CrosshairGap = 5,
+            CrosshairDotSize = 6,
+            CursorSize = CrosshairService.CursorSizeCustom
         };
+        Assert.AreEqual((4, 16, 5, 6), CrosshairService.GetScaledGeometry(customSettings));
 
-        Assert.AreEqual((2, 12, 4, 3), CrosshairService.GetScaledGeometry(baseSettings));
+        // 5. Presets geram máscaras coerentes e proporcionais
+        var smallMask = CrosshairService.BuildMask(CrosshairStyle.LinesAndDot, 1, 8, 3, 2, true, false);
+        var normalMask = CrosshairService.BuildMask(CrosshairStyle.LinesAndDot, 2, 12, 4, 3, true, false);
+        var largeMask = CrosshairService.BuildMask(CrosshairStyle.LinesAndDot, 3, 18, 6, 5, true, false);
 
-        baseSettings.CursorSize = 14;
-        Assert.AreEqual((2, 9, 3, 2), CrosshairService.GetScaledGeometry(baseSettings));
-
-        baseSettings.CursorSize = 24;
-        Assert.AreEqual((3, 18, 6, 5), CrosshairService.GetScaledGeometry(baseSettings));
-
-        // A máscara real usa exatamente a geometria escalada (uma única vez) e é a mesma usada pela prévia.
-        var expected = CrosshairService.BuildMask(CrosshairStyle.LinesAndDot, 3, 18, 6, 5, false, false);
-        CollectionAssert.AreEqual(expected, CrosshairService.BuildMask(baseSettings));
-
-        // Escala maior ⇒ desenho maior em todas as dimensões (extensão total e quantidade de pixels)
-        int Extent(byte[] m) => Enumerable.Range(0, CrosshairService.GridSize).Count(y => MaskPixel(m, CrosshairService.GridCenter, y));
-        baseSettings.CursorSize = 14; var small = CrosshairService.BuildMask(baseSettings);
-        baseSettings.CursorSize = 18; var normal = CrosshairService.BuildMask(baseSettings);
-        baseSettings.CursorSize = 24; var large = CrosshairService.BuildMask(baseSettings);
-        Assert.IsTrue(Extent(small) < Extent(normal) && Extent(normal) < Extent(large));
-        Assert.IsTrue(small.Count(b => b == 1) < normal.Count(b => b == 1) && normal.Count(b => b == 1) < large.Count(b => b == 1));
+        int CountPixels(byte[] m) => m.Count(b => b == CrosshairService.PixelStroke);
+        Assert.IsTrue(CountPixels(smallMask) < CountPixels(normalMask), "Normal deve ter mais pixels que Pequena.");
+        Assert.IsTrue(CountPixels(normalMask) < CountPixels(largeMask), "Grande deve ter mais pixels que Normal.");
     }
 
     [TestMethod]
@@ -1343,19 +1356,97 @@ public class ShotMindTests
     }
 
     [TestMethod]
-    public void Settings_LegacyCrosshairScale_IsMigratedToAvoidDoubleScaling()
+    public void Settings_LegacyCrosshairScale_IsMigratedToFullPresets()
     {
-        var legacyLarge = new AppSettings { CursorSize = 24, CrosshairLength = 18, CrosshairScaleVersion = 0 };
+        var legacyLarge = new AppSettings { CursorSize = 24, CrosshairScaleVersion = 0 };
         SettingsService.ValidateSettings(legacyLarge);
-        Assert.AreEqual(12, legacyLarge.CrosshairLength);
+        Assert.AreEqual(3, legacyLarge.CrosshairThickness);
+        Assert.AreEqual(18, legacyLarge.CrosshairLength);
+        Assert.AreEqual(6, legacyLarge.CrosshairGap);
+        Assert.AreEqual(5, legacyLarge.CrosshairDotSize);
 
-        var legacyCompact = new AppSettings { CursorSize = 14, CrosshairLength = 9, CrosshairScaleVersion = 0 };
-        SettingsService.ValidateSettings(legacyCompact);
-        Assert.AreEqual(12, legacyCompact.CrosshairLength);
+        var legacySmall = new AppSettings { CursorSize = 14, CrosshairScaleVersion = 0 };
+        SettingsService.ValidateSettings(legacySmall);
+        Assert.AreEqual(1, legacySmall.CrosshairThickness);
+        Assert.AreEqual(8, legacySmall.CrosshairLength);
+        Assert.AreEqual(3, legacySmall.CrosshairGap);
+        Assert.AreEqual(2, legacySmall.CrosshairDotSize);
 
-        var custom = new AppSettings { CursorSize = 24, CrosshairLength = 20, CrosshairScaleVersion = 0 };
-        SettingsService.ValidateSettings(custom);
-        Assert.AreEqual(20, custom.CrosshairLength, "Valores personalizados não devem ser alterados.");
+        var legacyNormal = new AppSettings { CursorSize = 18, CrosshairScaleVersion = 0 };
+        SettingsService.ValidateSettings(legacyNormal);
+        Assert.AreEqual(2, legacyNormal.CrosshairThickness);
+        Assert.AreEqual(12, legacyNormal.CrosshairLength);
+        Assert.AreEqual(4, legacyNormal.CrosshairGap);
+        Assert.AreEqual(3, legacyNormal.CrosshairDotSize);
+    }
+
+    [TestMethod]
+    public void Crosshair_MandatoryVerification_GeometryFormatsAndPresets()
+    {
+        // 1. Verificar os 3 presets completos de escala
+        var (tS, lS, gS, dS) = CrosshairService.PresetSmall;
+        Assert.AreEqual((1, 8, 3, 2), (tS, lS, gS, dS), "Pequena deve ter (1, 8, 3, 2)");
+
+        var (tN, lN, gN, dN) = CrosshairService.PresetNormal;
+        Assert.AreEqual((2, 12, 4, 3), (tN, lN, gN, dN), "Normal deve ter (2, 12, 4, 3)");
+
+        var (tG, lG, gG, dG) = CrosshairService.PresetLarge;
+        Assert.AreEqual((3, 18, 6, 5), (tG, lG, gG, dG), "Grande deve ter (3, 18, 6, 5)");
+
+        // 2. Modificar manualmente cada controle -> escala passa para Personalizado sem alterar outros 3
+        Assert.AreEqual(CrosshairService.CursorSizeCustom, CrosshairService.IdentifyPreset(5, lN, gN, dN));
+        Assert.AreEqual(CrosshairService.CursorSizeCustom, CrosshairService.IdentifyPreset(tN, 25, gN, dN));
+        Assert.AreEqual(CrosshairService.CursorSizeCustom, CrosshairService.IdentifyPreset(tN, lN, 10, dN));
+        Assert.AreEqual(CrosshairService.CursorSizeCustom, CrosshairService.IdentifyPreset(tN, lN, gN, 8));
+
+        // 3. Ao restaurar para os valores exatos de qualquer preset, identifica novamente o preset
+        Assert.AreEqual(CrosshairService.CursorSizeSmall, CrosshairService.IdentifyPreset(tS, lS, gS, dS));
+        Assert.AreEqual(CrosshairService.CursorSizeNormal, CrosshairService.IdentifyPreset(tN, lN, gN, dN));
+        Assert.AreEqual(CrosshairService.CursorSizeLarge, CrosshairService.IdentifyPreset(tG, lG, gG, dG));
+
+        // 4. Testar individualmente os 5 formatos de mira
+        int center = CrosshairService.GridCenter;
+        int centerIdx = center * CrosshairService.GridSize + center;
+
+        var maskSimple = CrosshairService.BuildMask(CrosshairStyle.Simple, 2, 12, 4, 3, false, false);
+        var maskOpen = CrosshairService.BuildMask(CrosshairStyle.Open, 2, 12, 4, 3, false, false);
+        var maskClosed = CrosshairService.BuildMask(CrosshairStyle.Closed, 2, 12, 4, 3, false, false);
+        var maskCenterDot = CrosshairService.BuildMask(CrosshairStyle.CenterDot, 2, 12, 4, 3, true, false);
+        var maskLinesDot = CrosshairService.BuildMask(CrosshairStyle.LinesAndDot, 2, 12, 4, 3, true, false);
+
+        // 5. Confirmar visualmente/numericamente que Simples e Aberta são claramente DIFERENTES
+        Assert.AreEqual(CrosshairService.PixelStroke, maskSimple[centerIdx], "Simples tem traço contínuo no centro.");
+        Assert.AreEqual(CrosshairService.PixelEmpty, maskOpen[centerIdx], "Aberta tem centro vazio.");
+        CollectionAssert.AreNotEqual(maskSimple, maskOpen, "Mira Simples e Mira Aberta devem ter geometrias distintas!");
+
+        // 6. Mira Fechada é estrutura fechada conectada (paredes da caixa e braços)
+        Assert.AreEqual(CrosshairService.PixelStroke, maskClosed[(center - 4) * CrosshairService.GridSize + center], "Parede superior da caixa fechada");
+        Assert.AreEqual(CrosshairService.PixelStroke, maskClosed[(center - 8) * CrosshairService.GridSize + center], "Braço superior conectado");
+        CollectionAssert.AreNotEqual(maskClosed, maskSimple, "Fechada e Simples devem ter geometrias distintas!");
+        CollectionAssert.AreNotEqual(maskClosed, maskOpen, "Fechada e Aberta devem ter geometrias distintas!");
+
+        // 7. Ponto Central tem ponto no pixel exato do cursor e zero braços
+        Assert.AreEqual(CrosshairService.PixelStroke, maskCenterDot[centerIdx], "Ponto central no centro exato");
+        Assert.AreEqual(CrosshairService.PixelEmpty, maskCenterDot[(center - 10) * CrosshairService.GridSize + center], "Ponto central não deve ter braços");
+
+        // 8. Linhas + Ponto combina braços e ponto central
+        Assert.AreEqual(CrosshairService.PixelStroke, maskLinesDot[centerIdx], "Ponto presente");
+        Assert.AreEqual(CrosshairService.PixelEmpty, maskLinesDot[(center - 2) * CrosshairService.GridSize + center], "Vão livre presente");
+        Assert.AreEqual(CrosshairService.PixelStroke, maskLinesDot[(center - 8) * CrosshairService.GridSize + center], "Braços presentes");
+
+        // 9. Consistência entre prévia e captura: BuildMask(AppSettings) produz a mesma geometria direta
+        var settings = new AppSettings
+        {
+            CrosshairStyle = CrosshairStyle.Closed,
+            CrosshairThickness = 2,
+            CrosshairLength = 12,
+            CrosshairGap = 4,
+            CrosshairDotSize = 3,
+            CrosshairShowDot = false,
+            CrosshairOutline = false
+        };
+        var settingsMask = CrosshairService.BuildMask(settings);
+        CollectionAssert.AreEqual(maskClosed, settingsMask, "A mira da captura e a prévia devem ser matematicamente idênticas.");
     }
 
     // ------------------------------------------------------------------
