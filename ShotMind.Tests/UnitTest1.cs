@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Drawing;
 using System.IO;
@@ -1082,6 +1082,14 @@ public class ShotMindTests
                 var navSidebar = (System.Windows.Controls.ListBox)win.FindName("NavSidebar");
                 Assert.IsNotNull(navSidebar);
 
+                // Análise automática removida da interface; controles do som da captura presentes
+                Assert.IsNull(win.FindName("ChkAutoAnalyze"), "A opção de análise automática deve ter sido removida.");
+                Assert.IsNotNull(win.FindName("CmbCaptureSound"));
+                Assert.IsNotNull(win.FindName("SliderSoundVolume"));
+                Assert.IsNotNull(win.FindName("ChkMuteSound"));
+                Assert.IsNotNull(win.FindName("BtnPreviewSound"));
+                Assert.IsNotNull(win.FindName("BtnImportSound"));
+                Assert.IsNotNull(win.FindName("BtnRemoveSound"));
                 var rootContent = (System.Windows.FrameworkElement)win.Content;
                 Assert.IsNotNull(rootContent);
 
@@ -1155,5 +1163,414 @@ public class ShotMindTests
         Assert.IsTrue(File.Exists(Path.Combine(outputDir, "pane_3.png")));
         Assert.IsTrue(File.Exists(Path.Combine(outputDir, "pane_4.png")));
         Assert.IsTrue(File.Exists(Path.Combine(outputDir, "pane_5.png")));
+    }
+
+    // ------------------------------------------------------------------
+    // Miras: formato, centralização, abertura e escala
+    // ------------------------------------------------------------------
+
+    private static bool MaskPixel(byte[] mask, int x, int y)
+        => x >= 0 && x < CrosshairService.GridSize && y >= 0 && y < CrosshairService.GridSize
+           && mask[y * CrosshairService.GridSize + x] == CrosshairService.PixelStroke;
+
+    private static void AssertMaskSymmetric(byte[] mask, bool evenPivot, string context)
+    {
+        // Espelho em torno do pivô: pixel central (par = 80 - x) ou par de pixels centrais (81 - x)
+        int sum = evenPivot ? 2 * CrosshairService.GridCenter + 1 : 2 * CrosshairService.GridCenter;
+        int size = CrosshairService.GridSize;
+
+        for (int y = 0; y < size; y++)
+        {
+            for (int x = 0; x < size; x++)
+            {
+                bool p = MaskPixel(mask, x, y);
+                Assert.AreEqual(p, MaskPixel(mask, sum - x, y), $"{context}: assimetria horizontal em ({x},{y})");
+                Assert.AreEqual(p, MaskPixel(mask, x, sum - y), $"{context}: assimetria vertical em ({x},{y})");
+                Assert.AreEqual(p, MaskPixel(mask, y, x), $"{context}: assimetria diagonal em ({x},{y})");
+            }
+        }
+    }
+
+    [TestMethod]
+    public void Crosshair_AllStylesThicknessesAndDots_AreSymmetricAndCenterDotIsExactlyCentered()
+    {
+        foreach (CrosshairStyle style in Enum.GetValues(typeof(CrosshairStyle)))
+        {
+            for (int thickness = 1; thickness <= 6; thickness++)
+            {
+                for (int dot = 1; dot <= 10; dot++)
+                {
+                    foreach (bool showDot in new[] { false, true })
+                    {
+                        var mask = CrosshairService.BuildMask(style, thickness, 12, 4, dot, showDot, showOutline: false);
+
+                        // Com linhas, o pivô segue a espessura; só o ponto (CenterDot) segue o tamanho do ponto.
+                        bool evenPivot = style == CrosshairStyle.CenterDot ? dot % 2 == 0 : thickness % 2 == 0;
+                        AssertMaskSymmetric(mask, evenPivot, $"{style} t={thickness} dot={dot} showDot={showDot}");
+                    }
+                }
+            }
+        }
+    }
+
+    [TestMethod]
+    public void Crosshair_OpenStyle_HasFourSymmetricArmsAndHonorsConfiguredGap()
+    {
+        int center = CrosshairService.GridCenter;
+
+        foreach (int gap in new[] { 1, 2, 4, 7, 10 })
+        {
+            // Espessura ímpar: pixel central + (gap-1) livres de cada lado
+            var odd = CrosshairService.BuildMask(CrosshairStyle.Open, 1, 10, gap, 3, showDot: false, showOutline: false);
+            Assert.IsFalse(MaskPixel(odd, center, center), "Mira aberta não pode ter ponto/linha no centro.");
+            for (int k = 0; k < gap; k++)
+            {
+                Assert.IsFalse(MaskPixel(odd, center, center - k) || MaskPixel(odd, center, center + k), $"vão (k={k}) deve estar livre, gap={gap}");
+            }
+            Assert.IsTrue(MaskPixel(odd, center, center - gap) && MaskPixel(odd, center, center + gap), $"braço vertical deve iniciar em k={gap}");
+            Assert.IsTrue(MaskPixel(odd, center - gap, center) && MaskPixel(odd, center + gap, center), $"braço horizontal deve iniciar em k={gap}");
+            Assert.IsTrue(MaskPixel(odd, center, center - gap - 9) && !MaskPixel(odd, center, center - gap - 10), "comprimento exato de 10 px");
+
+            // Espessura par: 2 pixels centrais; distâncias idênticas para os quatro braços
+            var even = CrosshairService.BuildMask(CrosshairStyle.Open, 2, 10, gap, 3, showDot: false, showOutline: false);
+            Assert.IsFalse(MaskPixel(even, center, center) || MaskPixel(even, center + 1, center + 1));
+            int topStart = Enumerable.Range(0, center).Select(i => center - i).First(y => MaskPixel(even, center, y));
+            int bottomStart = Enumerable.Range(center + 1, center).First(y => MaskPixel(even, center, y));
+            int leftStart = Enumerable.Range(0, center).Select(i => center - i).First(x => MaskPixel(even, x, center));
+            int rightStart = Enumerable.Range(center + 1, center).First(x => MaskPixel(even, x, center));
+            Assert.AreEqual(center + center + 1, topStart + bottomStart, "braços superior/inferior simétricos (espessura par)");
+            Assert.AreEqual(center + center + 1, leftStart + rightStart, "braços esquerdo/direito simétricos (espessura par)");
+            Assert.AreEqual(gap, center - topStart, "o vão configurado deve ser respeitado");
+        }
+    }
+
+    [TestMethod]
+    public void Crosshair_EachStyleDrawsItsExpectedShape()
+    {
+        int c = CrosshairService.GridCenter;
+        int Count(byte[] m) => m.Count(b => b == CrosshairService.PixelStroke);
+
+        var simple = CrosshairService.BuildMask(CrosshairStyle.Simple, 1, 10, 4, 3, false, false);
+        Assert.IsFalse(MaskPixel(simple, c, c));
+        Assert.IsTrue(MaskPixel(simple, c, c - 4));
+
+        var open = CrosshairService.BuildMask(CrosshairStyle.Open, 1, 10, 4, 3, true, false);
+        // Mesmo com o interruptor do ponto ligado, o ponto só aparece se solicitado; aqui há ponto e braços afastados
+        Assert.IsTrue(MaskPixel(open, c, c));
+
+        var closed = CrosshairService.BuildMask(CrosshairStyle.Closed, 1, 10, 4, 3, false, false);
+        for (int i = -13; i <= 13; i++)
+        {
+            Assert.IsTrue(MaskPixel(closed, c, c + i) && MaskPixel(closed, c + i, c), $"cruz contínua deve cobrir k={i}");
+        }
+        Assert.IsFalse(MaskPixel(closed, c + 1, c + 1));
+
+        var dotOnly = CrosshairService.BuildMask(CrosshairStyle.CenterDot, 1, 10, 4, 5, true, false);
+        Assert.IsTrue(MaskPixel(dotOnly, c, c));
+        Assert.IsFalse(MaskPixel(dotOnly, c, c - 10));
+        Assert.IsTrue(Count(dotOnly) < 30, "CenterDot não pode desenhar linhas");
+
+        var linesAndDot = CrosshairService.BuildMask(CrosshairStyle.LinesAndDot, 1, 10, 6, 3, false, false);
+        Assert.IsTrue(MaskPixel(linesAndDot, c, c), "ponto central presente");
+        Assert.IsFalse(MaskPixel(linesAndDot, c, c - 3), "separação entre ponto e braços");
+        Assert.IsTrue(MaskPixel(linesAndDot, c, c - 6), "braços após o vão");
+    }
+
+    [TestMethod]
+    public void Crosshair_QuickScale_IsProportionalMultiplierOnAllElementsWithoutDoubleApplication()
+    {
+        var baseSettings = new AppSettings
+        {
+            CrosshairStyle = CrosshairStyle.LinesAndDot,
+            CrosshairThickness = 2,
+            CrosshairLength = 12,
+            CrosshairGap = 4,
+            CrosshairDotSize = 3,
+            CrosshairOutline = false,
+            CursorSize = 18
+        };
+
+        Assert.AreEqual((2, 12, 4, 3), CrosshairService.GetScaledGeometry(baseSettings));
+
+        baseSettings.CursorSize = 14;
+        Assert.AreEqual((2, 9, 3, 2), CrosshairService.GetScaledGeometry(baseSettings));
+
+        baseSettings.CursorSize = 24;
+        Assert.AreEqual((3, 18, 6, 5), CrosshairService.GetScaledGeometry(baseSettings));
+
+        // A máscara real usa exatamente a geometria escalada (uma única vez) e é a mesma usada pela prévia.
+        var expected = CrosshairService.BuildMask(CrosshairStyle.LinesAndDot, 3, 18, 6, 5, false, false);
+        CollectionAssert.AreEqual(expected, CrosshairService.BuildMask(baseSettings));
+
+        // Escala maior ⇒ desenho maior em todas as dimensões (extensão total e quantidade de pixels)
+        int Extent(byte[] m) => Enumerable.Range(0, CrosshairService.GridSize).Count(y => MaskPixel(m, CrosshairService.GridCenter, y));
+        baseSettings.CursorSize = 14; var small = CrosshairService.BuildMask(baseSettings);
+        baseSettings.CursorSize = 18; var normal = CrosshairService.BuildMask(baseSettings);
+        baseSettings.CursorSize = 24; var large = CrosshairService.BuildMask(baseSettings);
+        Assert.IsTrue(Extent(small) < Extent(normal) && Extent(normal) < Extent(large));
+        Assert.IsTrue(small.Count(b => b == 1) < normal.Count(b => b == 1) && normal.Count(b => b == 1) < large.Count(b => b == 1));
+    }
+
+    [TestMethod]
+    public void Crosshair_ExtremeGeometryAtLargestScale_StaysInsideGridAndSymmetric()
+    {
+        var s = new AppSettings
+        {
+            CrosshairStyle = CrosshairStyle.LinesAndDot,
+            CrosshairThickness = 6,
+            CrosshairLength = 28,
+            CrosshairGap = 14,
+            CrosshairDotSize = 10,
+            CrosshairOutline = true,
+            CursorSize = 24
+        };
+
+        var mask = CrosshairService.BuildMask(s);
+        int size = CrosshairService.GridSize;
+        for (int i = 0; i < size; i++)
+        {
+            Assert.AreEqual(CrosshairService.PixelEmpty, mask[i], "borda superior deve ficar vazia");
+            Assert.AreEqual(CrosshairService.PixelEmpty, mask[(size - 1) * size + i], "borda inferior deve ficar vazia");
+            Assert.AreEqual(CrosshairService.PixelEmpty, mask[i * size], "borda esquerda deve ficar vazia");
+            Assert.AreEqual(CrosshairService.PixelEmpty, mask[i * size + size - 1], "borda direita deve ficar vazia");
+        }
+
+        s.CrosshairOutline = false;
+        var noOutline = CrosshairService.BuildMask(s);
+        bool IsSymmetric(int sum) => Enumerable.Range(0, size).All(y => Enumerable.Range(0, size).All(x =>
+            MaskPixel(noOutline, x, y) == MaskPixel(noOutline, sum - x, y) && MaskPixel(noOutline, x, y) == MaskPixel(noOutline, x, sum - y)));
+        Assert.IsTrue(IsSymmetric(2 * CrosshairService.GridCenter) || IsSymmetric(2 * CrosshairService.GridCenter + 1), "mira extrema deve permanecer simétrica");
+    }
+
+    [TestMethod]
+    public void Settings_LegacyCrosshairScale_IsMigratedToAvoidDoubleScaling()
+    {
+        var legacyLarge = new AppSettings { CursorSize = 24, CrosshairLength = 18, CrosshairScaleVersion = 0 };
+        SettingsService.ValidateSettings(legacyLarge);
+        Assert.AreEqual(12, legacyLarge.CrosshairLength);
+
+        var legacyCompact = new AppSettings { CursorSize = 14, CrosshairLength = 9, CrosshairScaleVersion = 0 };
+        SettingsService.ValidateSettings(legacyCompact);
+        Assert.AreEqual(12, legacyCompact.CrosshairLength);
+
+        var custom = new AppSettings { CursorSize = 24, CrosshairLength = 20, CrosshairScaleVersion = 0 };
+        SettingsService.ValidateSettings(custom);
+        Assert.AreEqual(20, custom.CrosshairLength, "Valores personalizados não devem ser alterados.");
+    }
+
+    // ------------------------------------------------------------------
+    // Som da captura
+    // ------------------------------------------------------------------
+
+    [TestMethod]
+    public void Sound_BuiltInSounds_AreValidWavFilesWithoutClipping()
+    {
+        foreach (string key in new[] { "shutter", "soft", "chime", "pop", "beep" })
+        {
+            byte[]? wav = SoundService.SynthesizeBuiltIn(key);
+            Assert.IsNotNull(wav, key);
+            Assert.IsTrue(wav!.Length > 1000, key);
+            Assert.AreEqual("RIFF", System.Text.Encoding.ASCII.GetString(wav, 0, 4));
+            Assert.AreEqual("WAVE", System.Text.Encoding.ASCII.GetString(wav, 8, 4));
+            Assert.AreEqual(wav.Length - 8, BitConverter.ToInt32(wav, 4));
+
+            int peak = 0;
+            for (int i = 44; i + 1 < wav.Length; i += 2)
+            {
+                peak = Math.Max(peak, Math.Abs((int)BitConverter.ToInt16(wav, i)));
+            }
+            Assert.IsTrue(peak > 3000, $"{key} deve ser audível");
+            Assert.IsTrue(peak < short.MaxValue, $"{key} não pode saturar");
+        }
+
+        Assert.IsNull(SoundService.SynthesizeBuiltIn("inexistente"));
+    }
+
+    [TestMethod]
+    public void Sound_VolumeMuteAndMasterSwitch_ControlPlaybackDecision()
+    {
+        Assert.AreEqual(0.0, SoundService.ToPlayerVolume(0));
+        Assert.AreEqual(0.5, SoundService.ToPlayerVolume(50));
+        Assert.AreEqual(1.0, SoundService.ToPlayerVolume(100));
+        Assert.AreEqual(1.0, SoundService.ToPlayerVolume(250));
+        Assert.AreEqual(0.0, SoundService.ToPlayerVolume(-10));
+
+        var s = new AppSettings { PlaySoundOnCapture = true, CaptureSoundMuted = false, CaptureSoundVolume = 40 };
+        Assert.IsTrue(SoundService.ShouldPlayCaptureSound(s));
+        s.CaptureSoundMuted = true;
+        Assert.IsFalse(SoundService.ShouldPlayCaptureSound(s), "silenciado não toca");
+        s.CaptureSoundMuted = false; s.CaptureSoundVolume = 0;
+        Assert.IsFalse(SoundService.ShouldPlayCaptureSound(s), "volume 0 não toca");
+        s.CaptureSoundVolume = 100; s.PlaySoundOnCapture = false;
+        Assert.IsFalse(SoundService.ShouldPlayCaptureSound(s), "interruptor geral desligado não toca");
+
+        Assert.IsFalse(SoundService.PreviewSound("builtin:soft", 80, muted: true), "pré-visualização respeita o silenciamento");
+        Assert.IsFalse(SoundService.PreviewSound("builtin:soft", 0, muted: false), "pré-visualização respeita volume 0");
+        Assert.IsTrue(SoundService.PreviewSound("builtin:soft", 5, muted: false));
+        Assert.IsTrue(SoundService.PreviewSound("system", 100, muted: false));
+    }
+
+    [TestMethod]
+    public async Task Sound_ImportSelectPersistAndRemoveCustomSound_WorksAndSurvivesRestart()
+    {
+        var settingsService = SettingsService.Instance;
+        string originalId = settingsService.Current.CaptureSoundId;
+        string tempDir = Path.Combine(Path.GetTempPath(), "CrankoShotSoundTests_" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(tempDir);
+        string? importedId = null;
+
+        try
+        {
+            // Arquivo de origem temporário (será apagado depois: o app NÃO pode depender dele)
+            string source = Path.Combine(tempDir, "meu som.wav");
+            File.WriteAllBytes(source, SoundService.SynthesizeBuiltIn("chime")!);
+
+            var (ok, message, sound) = await SoundService.ImportCustomSoundAsync(source);
+            Assert.IsTrue(ok, message);
+            Assert.IsNotNull(sound);
+            importedId = sound!.Id;
+            Assert.AreEqual("meu som", sound.DisplayName);
+
+            string storedPath = Path.Combine(SoundService.CustomDirectory, sound.FileName);
+            Assert.IsTrue(File.Exists(storedPath), "arquivo importado deve ser copiado para a pasta do aplicativo");
+
+            // O original pode desaparecer sem afetar o som importado
+            File.Delete(source);
+            Directory.Delete(tempDir, true);
+            Assert.IsTrue(File.Exists(storedPath));
+
+            // Selecionar como som padrão e persistir
+            settingsService.Current.CaptureSoundId = SoundService.CustomPrefix + sound.Id;
+            settingsService.Current.CaptureSoundVolume = 35;
+            settingsService.Current.CaptureSoundMuted = false;
+            Assert.IsTrue(settingsService.Save());
+
+            // "Reinício": recarrega as configurações do disco
+            var reloaded = settingsService.Load();
+            Assert.AreEqual(SoundService.CustomPrefix + sound.Id, reloaded.CaptureSoundId);
+            Assert.AreEqual(35, reloaded.CaptureSoundVolume);
+            Assert.IsTrue(reloaded.CustomCaptureSounds.Any(c => c.Id == sound.Id));
+            Assert.IsTrue(SoundService.GetAvailableSounds().Any(o => o.Id == SoundService.CustomPrefix + sound.Id && o.IsCustom));
+
+            string? resolved = SoundService.ResolveSoundPath(reloaded.CaptureSoundId, reloaded.CustomCaptureSounds);
+            Assert.AreEqual(storedPath, resolved);
+
+            // Reproduzir e pré-visualizar o som importado não pode lançar exceções
+            Assert.IsTrue(SoundService.PreviewSound(reloaded.CaptureSoundId, 35, muted: false));
+            SoundService.PlayCaptureSound();
+            await Task.Delay(400);
+
+            // Remover: apaga o arquivo, remove da lista e volta ao som padrão
+            Assert.IsTrue(SoundService.RemoveCustomSound(sound.Id));
+            importedId = null;
+            Assert.IsFalse(File.Exists(storedPath), "arquivo importado deve ser apagado ao remover");
+            Assert.IsFalse(settingsService.Current.CustomCaptureSounds.Any(c => c.Id == sound.Id));
+            Assert.AreEqual(SoundService.SystemSoundId, settingsService.Current.CaptureSoundId);
+        }
+        finally
+        {
+            if (importedId != null) SoundService.RemoveCustomSound(importedId);
+            settingsService.Current.CaptureSoundId = originalId;
+            settingsService.Current.CaptureSoundVolume = 100;
+            settingsService.Save();
+            try { if (Directory.Exists(tempDir)) Directory.Delete(tempDir, true); } catch { }
+        }
+    }
+
+    [TestMethod]
+    public async Task Sound_ImportRejectsInvalidUnsupportedAndTooLongFiles()
+    {
+        string tempDir = Path.Combine(Path.GetTempPath(), "CrankoShotSoundTests_" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(tempDir);
+
+        try
+        {
+            int before = SettingsService.Instance.Current.CustomCaptureSounds.Count;
+
+            string txt = Path.Combine(tempDir, "nota.txt");
+            File.WriteAllText(txt, "não é áudio");
+            var (okTxt, msgTxt, _) = await SoundService.ImportCustomSoundAsync(txt);
+            Assert.IsFalse(okTxt);
+            StringAssert.Contains(msgTxt, "WAV ou MP3");
+
+            string corrupt = Path.Combine(tempDir, "corrompido.mp3");
+            File.WriteAllBytes(corrupt, new byte[4096]);
+            var (okCorrupt, msgCorrupt, _) = await SoundService.ImportCustomSoundAsync(corrupt);
+            Assert.IsFalse(okCorrupt, msgCorrupt);
+
+            // WAV de ~12 s (acima do limite de 10 s)
+            int sampleRate = 22050, seconds = 12;
+            var longWav = new byte[44 + sampleRate * 2 * seconds];
+            System.Text.Encoding.ASCII.GetBytes("RIFF").CopyTo(longWav, 0);
+            BitConverter.GetBytes(longWav.Length - 8).CopyTo(longWav, 4);
+            System.Text.Encoding.ASCII.GetBytes("WAVEfmt ").CopyTo(longWav, 8);
+            BitConverter.GetBytes(16).CopyTo(longWav, 16);
+            BitConverter.GetBytes((short)1).CopyTo(longWav, 20);
+            BitConverter.GetBytes((short)1).CopyTo(longWav, 22);
+            BitConverter.GetBytes(sampleRate).CopyTo(longWav, 24);
+            BitConverter.GetBytes(sampleRate * 2).CopyTo(longWav, 28);
+            BitConverter.GetBytes((short)2).CopyTo(longWav, 32);
+            BitConverter.GetBytes((short)16).CopyTo(longWav, 34);
+            System.Text.Encoding.ASCII.GetBytes("data").CopyTo(longWav, 36);
+            BitConverter.GetBytes(sampleRate * 2 * seconds).CopyTo(longWav, 40);
+            string longPath = Path.Combine(tempDir, "longo.wav");
+            File.WriteAllBytes(longPath, longWav);
+            var (okLong, msgLong, _) = await SoundService.ImportCustomSoundAsync(longPath);
+            Assert.IsFalse(okLong, msgLong);
+            StringAssert.Contains(msgLong, "segundos");
+
+            Assert.AreEqual(before, SettingsService.Instance.Current.CustomCaptureSounds.Count, "arquivos rejeitados não entram na lista");
+            Assert.AreEqual(0, Directory.Exists(SoundService.CustomDirectory)
+                ? Directory.GetFiles(SoundService.CustomDirectory).Count(f => !SettingsService.Instance.Current.CustomCaptureSounds.Any(c => c.FileName == Path.GetFileName(f)))
+                : 0, "arquivos rejeitados não podem ficar órfãos no disco");
+        }
+        finally
+        {
+            try { Directory.Delete(tempDir, true); } catch { }
+        }
+    }
+
+    // ------------------------------------------------------------------
+    // Análise automática removida
+    // ------------------------------------------------------------------
+
+    [TestMethod]
+    public void AutoAnalyze_SettingRemoved_LegacyJsonStillLoadsWithoutErrors()
+    {
+        Assert.IsNull(typeof(AppSettings).GetProperty("AutoAnalyzeEnabled"));
+        Assert.IsNull(typeof(AppSettings).GetProperty("AutoAnalyzeActions"));
+
+        string legacyJson = "{ \"AutoAnalyzeEnabled\": true, \"AutoAnalyzeActions\": [0], \"GeminiModel\": \"gemini-2.5-pro\" }";
+        var loaded = System.Text.Json.JsonSerializer.Deserialize<AppSettings>(legacyJson);
+        Assert.IsNotNull(loaded);
+        Assert.AreEqual("gemini-2.5-pro", loaded!.GeminiModel);
+    }
+
+    [TestMethod]
+    public void AutoAnalyze_CaptureFlow_NeverStartsAiWithoutUserAction()
+    {
+        // Em todo o código do aplicativo, AiResultWindow só é instanciada em handlers de botões/menus de IA.
+        string root = AppDomain.CurrentDomain.BaseDirectory;
+        string? dir = root;
+        while (dir != null && !File.Exists(Path.Combine(dir, "ShotMind.sln"))) dir = Path.GetDirectoryName(dir);
+        Assert.IsNotNull(dir, "solução não localizada");
+
+        foreach (string file in Directory.GetFiles(Path.Combine(dir!, "ShotMind"), "*.cs", SearchOption.AllDirectories)
+                     .Where(f => !f.Contains(@"\obj\") && !f.Contains(@"\bin\")))
+        {
+            string text = File.ReadAllText(file);
+            Assert.IsFalse(text.Contains("AutoAnalyze"), $"{Path.GetFileName(file)} ainda referencia AutoAnalyze");
+        }
+
+        string overlay = File.ReadAllText(Path.Combine(dir!, "ShotMind", "UI", "Views", "CaptureOverlayWindow.xaml.cs"));
+        foreach (string method in new[] { "BtnCopy_Click", "BtnSave_Click", "BtnPin_Click", "BtnEditor_Click" })
+        {
+            int start = overlay.IndexOf($"void {method}(", StringComparison.Ordinal);
+            Assert.IsTrue(start > 0, method);
+            int end = overlay.IndexOf("private ", start + method.Length, StringComparison.Ordinal);
+            string body = overlay.Substring(start, end - start);
+            Assert.IsFalse(body.Contains("AiResultWindow") || body.Contains("GeminiService") || body.Contains("OpenRouterService"),
+                $"{method} não pode iniciar análise de IA");
+        }
     }
 }

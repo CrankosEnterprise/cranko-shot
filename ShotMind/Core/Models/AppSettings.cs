@@ -10,6 +10,13 @@ public class AppSettings
     public bool RunOnStartup { get; set; } = false;
     public bool MinimizeToTray { get; set; } = true;
     public bool PlaySoundOnCapture { get; set; } = true;
+
+    // Som da captura: "system" (som do Windows), "builtin:<nome>" ou "custom:<id>"
+    public string CaptureSoundId { get; set; } = "system";
+    public int CaptureSoundVolume { get; set; } = 100; // 0..100, independente do volume geral do Windows
+    public bool CaptureSoundMuted { get; set; } = false;
+    public List<CustomCaptureSound> CustomCaptureSounds { get; set; } = new();
+
     public bool ShowNotifications { get; set; } = true;
     public bool DarkTheme { get; set; } = true;
     public string AccentTheme { get; set; } = "Purple"; // Purple, Red, Pink, Green, Yellow, White, Orange, Blue
@@ -51,7 +58,8 @@ public class AppSettings
     // Cursor e Seleção (Mira)
     public bool AutoContrastCursor { get; set; } = true;
     public string CursorColor { get; set; } = "#8B5CF6";
-    public int CursorSize { get; set; } = 18; // 14: compacto, 18: normal, 24: grande
+    public int CursorSize { get; set; } = 18; // Escala rápida (multiplicador): 14 = 0,75x, 18 = 1x, 24 = 1,5x
+    public int CrosshairScaleVersion { get; set; } = 0; // 0 = formato antigo (escala alterava só o comprimento)
     public CrosshairStyle CrosshairStyle { get; set; } = CrosshairStyle.Simple;
     public int CrosshairThickness { get; set; } = 2;
     public int CrosshairLength { get; set; } = 12;
@@ -67,8 +75,6 @@ public class AppSettings
     public string EncryptedOpenRouterApiKey { get; set; } = string.Empty;
     public string OpenRouterModel { get; set; } = "google/gemma-4-31b-it:free";
     public bool OpenRouterFreeModelsOnly { get; set; } = true;
-    public bool AutoAnalyzeEnabled { get; set; } = false;
-    public List<AiActionType> AutoAnalyzeActions { get; set; } = new() { AiActionType.Analyze };
 
     // OCR
     public string PreferredOcrLanguage { get; set; } = "pt-BR";

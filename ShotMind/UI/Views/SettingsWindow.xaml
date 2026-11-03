@@ -147,6 +147,39 @@
                                 <CheckBox x:Name="ChkNotifications" Content="Exibir notificações na bandeja do sistema" />
                             </StackPanel>
                         </Border>
+
+                        <!-- Som da Captura -->
+                        <Border Background="{StaticResource BgGlassCardBrush}" BorderBrush="{StaticResource GlassHighlightBorderBrush}" BorderThickness="1" CornerRadius="12" Padding="18" Margin="0,0,0,12">
+                            <StackPanel>
+                                <TextBlock Text="Som da Captura" Foreground="{StaticResource TextPrimaryBrush}" FontWeight="SemiBold" FontSize="14" Margin="0,0,0,4" TextWrapping="Wrap"/>
+                                <TextBlock Text="Escolha o som reproduzido ao capturar, ajuste o volume e importe seus próprios arquivos (WAV ou MP3)." Foreground="{StaticResource TextSecondaryBrush}" FontSize="12.5" TextWrapping="Wrap" Margin="0,0,0,14"/>
+
+                                <TextBlock Text="Som:" Foreground="{StaticResource TextSecondaryBrush}" FontSize="12.5" Margin="0,0,0,6"/>
+                                <Grid Margin="0,0,0,10">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*"/>
+                                        <ColumnDefinition Width="Auto"/>
+                                    </Grid.ColumnDefinitions>
+                                    <ComboBox x:Name="CmbCaptureSound" Grid.Column="0" Height="36" HorizontalAlignment="Stretch" SelectionChanged="CmbCaptureSound_SelectionChanged"/>
+                                    <Button x:Name="BtnPreviewSound" Grid.Column="1" Style="{StaticResource SecondaryButtonStyle}" Height="36" Padding="14,0" Margin="8,0,0,0" Content="▶ Ouvir" ToolTip="Reproduzir o som selecionado com o volume atual" Click="BtnPreviewSound_Click"/>
+                                </Grid>
+
+                                <WrapPanel Margin="0,0,0,14">
+                                    <Button x:Name="BtnImportSound" Style="{StaticResource SecondaryButtonStyle}" Height="32" Padding="12,0" Margin="0,0,8,6" Content="Importar som..." ToolTip="Importar um arquivo WAV ou MP3 do computador" Click="BtnImportSound_Click"/>
+                                    <Button x:Name="BtnRemoveSound" Style="{StaticResource SecondaryButtonStyle}" Height="32" Padding="12,0" Margin="0,0,0,6" Content="Remover som importado" ToolTip="Remove o som importado selecionado" Click="BtnRemoveSound_Click"/>
+                                </WrapPanel>
+
+                                <DockPanel LastChildFill="True" Margin="0,0,0,4">
+                                    <TextBlock DockPanel.Dock="Right" x:Name="TxtSoundVolumeVal" Text="100%" Foreground="{DynamicResource AccentLightBrush}" FontSize="12.5" FontWeight="Bold" Margin="8,0,0,0"/>
+                                    <TextBlock Text="Volume do som da captura:" Foreground="{StaticResource TextSecondaryBrush}" FontSize="12.5" TextWrapping="Wrap"/>
+                                </DockPanel>
+                                <Slider x:Name="SliderSoundVolume" Minimum="0" Maximum="100" Value="100" SmallChange="1" LargeChange="10" IsSnapToTickEnabled="True" TickFrequency="1" Margin="0,0,0,8" ValueChanged="SliderSoundVolume_ValueChanged"/>
+                                <CheckBox x:Name="ChkMuteSound" Content="Silenciar o som da captura" Checked="ChkMuteSound_Changed" Unchecked="ChkMuteSound_Changed"/>
+
+                                <TextBlock x:Name="TxtSoundStatus" Foreground="{StaticResource TextMutedBrush}" FontSize="12" TextWrapping="Wrap" Margin="0,8,0,0"
+                                           Text="O volume é independente do volume geral do Windows: ele ajusta apenas o nível do CrankoShot."/>
+                            </StackPanel>
+                        </Border>
                     </StackPanel>
 
                     <!-- ================= PANE 2: CAPTURA & ATALHOS ================= -->
@@ -663,7 +696,7 @@
 
                                 <Separator Background="{StaticResource BorderBrush}" Margin="0,0,0,12"/>
 
-                                <!-- Predefinição rápida de escala (compatível com CursorSize) -->
+                                <!-- Escala rápida: multiplicador proporcional de TODAS as dimensões (espessura, comprimento, abertura e ponto) -->
                                 <Grid>
                                     <Grid.ColumnDefinitions>
                                         <ColumnDefinition Width="Auto"/>
@@ -671,11 +704,12 @@
                                     </Grid.ColumnDefinitions>
                                     <TextBlock Grid.Column="0" Text="Escala rápida da mira:" Foreground="{StaticResource TextSecondaryBrush}" FontSize="12.5" VerticalAlignment="Center" Margin="0,0,12,0"/>
                                     <ComboBox Grid.Column="1" x:Name="CmbCursorSize" Height="36" HorizontalAlignment="Stretch" SelectionChanged="CmbCursorSize_SelectionChanged">
-                                        <ComboBoxItem Content="Compacto (14 px)"/>
-                                        <ComboBoxItem Content="Normal — Padrão (18 px)"/>
-                                        <ComboBoxItem Content="Grande (24 px)"/>
+                                        <ComboBoxItem Content="Compacto (0,75×)"/>
+                                        <ComboBoxItem Content="Normal — Padrão (1×)"/>
+                                        <ComboBoxItem Content="Grande (1,5×)"/>
                                     </ComboBox>
                                 </Grid>
+                                <TextBlock Text="A escala multiplica proporcionalmente espessura, comprimento, abertura central e ponto central, sobre os valores definidos acima." Foreground="{StaticResource TextMutedBrush}" FontSize="11.5" TextWrapping="Wrap" Margin="0,8,0,0"/>
                             </StackPanel>
                         </Border>
                     </StackPanel>
@@ -964,14 +998,6 @@
                                 </WrapPanel>
 
                                 <TextBlock x:Name="TxtOpenRouterModelDescription" Foreground="{StaticResource TextSecondaryBrush}" FontSize="12" TextWrapping="Wrap"/>
-                            </StackPanel>
-                        </Border>
-
-                        <!-- Análise Automática -->
-                        <Border Background="{StaticResource BgGlassCardBrush}" BorderBrush="{StaticResource GlassHighlightBorderBrush}" BorderThickness="1" CornerRadius="12" Padding="18">
-                            <StackPanel>
-                                <TextBlock Text="Análise Automática" Foreground="{StaticResource TextPrimaryBrush}" FontWeight="SemiBold" FontSize="14" Margin="0,0,0,6" TextWrapping="Wrap"/>
-                                <CheckBox x:Name="ChkAutoAnalyze" Content="Analisar automaticamente após cada captura usando o provedor ativo" />
                             </StackPanel>
                         </Border>
                     </StackPanel>

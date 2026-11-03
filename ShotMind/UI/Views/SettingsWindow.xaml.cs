@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
@@ -87,7 +87,7 @@ public partial class SettingsWindow : Window
         {
             case 0:
                 TxtCategoryTitle.Text = "Configurações Gerais";
-                TxtCategorySubtitle.Text = "Inicialização, notificações e comportamento do sistema.";
+                TxtCategorySubtitle.Text = "Inicialização, notificações, som da captura e comportamento do sistema.";
                 break;
             case 1:
                 TxtCategoryTitle.Text = "Captura & Atalhos";
@@ -125,6 +125,7 @@ public partial class SettingsWindow : Window
         ChkMinimizeToTray.IsChecked = s.MinimizeToTray;
         ChkPlaySound.IsChecked = s.PlaySoundOnCapture;
         ChkNotifications.IsChecked = s.ShowNotifications;
+        LoadSoundUI(s);
 
         // Atalhos
         PopulateHotkeyKeys();
@@ -220,7 +221,6 @@ public partial class SettingsWindow : Window
 
             LoadInitialModels(s.GeminiModel);
             LoadInitialOpenRouterModels(s.OpenRouterModel, s.OpenRouterFreeModelsOnly);
-            ChkAutoAnalyze.IsChecked = s.AutoAnalyzeEnabled;
             UpdateAiProviderSelectionUI();
         }
         finally
@@ -228,6 +228,142 @@ public partial class SettingsWindow : Window
             _isLoadingAiUI = false;
         }
     }
+
+    #region Som da Captura
+
+    private void LoadSoundUI(AppSettings s)
+    {
+        SliderSoundVolume.Value = Math.Clamp(s.CaptureSoundVolume, 0, 100);
+        TxtSoundVolumeVal.Text = $"{(int)SliderSoundVolume.Value}%";
+        ChkMuteSound.IsChecked = s.CaptureSoundMuted;
+        PopulateSoundList(s.CaptureSoundId);
+        UpdateSoundControlsState();
+    }
+
+    private void PopulateSoundList(string selectedId)
+    {
+        var options = SoundService.GetAvailableSounds();
+        CmbCaptureSound.ItemsSource = null;
+        CmbCaptureSound.DisplayMemberPath = "DisplayName";
+        CmbCaptureSound.SelectedValuePath = "Id";
+        CmbCaptureSound.ItemsSource = options;
+
+        var selected = options.FirstOrDefault(o => o.Id.Equals(selectedId, StringComparison.OrdinalIgnoreCase))
+                       ?? options.First();
+        CmbCaptureSound.SelectedItem = selected;
+    }
+
+    private void UpdateSoundControlsState()
+    {
+        if (BtnRemoveSound == null || CmbCaptureSound == null) return;
+
+        BtnRemoveSound.IsEnabled = CmbCaptureSound.SelectedItem is SoundOption { IsCustom: true };
+
+        bool muted = ChkMuteSound?.IsChecked == true;
+        if (SliderSoundVolume != null) SliderSoundVolume.IsEnabled = !muted;
+        if (SliderSoundVolume != null) SliderSoundVolume.Opacity = muted ? 0.5 : 1.0;
+    }
+
+    private void SetSoundStatus(string message, bool isError)
+    {
+        if (TxtSoundStatus == null) return;
+        TxtSoundStatus.Text = message;
+        TxtSoundStatus.SetResourceReference(TextBlock.ForegroundProperty, isError ? "ErrorBrush" : "TextMutedBrush");
+    }
+
+    private void CmbCaptureSound_SelectionChanged(object sender, System.Windows.Controls.SelectionChangedEventArgs e)
+    {
+        UpdateSoundControlsState();
+    }
+
+    private void SliderSoundVolume_ValueChanged(object sender, RoutedPropertyChangedEventArgs<double> e)
+    {
+        if (TxtSoundVolumeVal != null && SliderSoundVolume != null)
+        {
+            TxtSoundVolumeVal.Text = $"{(int)SliderSoundVolume.Value}%";
+        }
+    }
+
+    private void ChkMuteSound_Changed(object sender, RoutedEventArgs e)
+    {
+        UpdateSoundControlsState();
+    }
+
+    private void BtnPreviewSound_Click(object sender, RoutedEventArgs e)
+    {
+        if (CmbCaptureSound.SelectedValue is not string soundId) return;
+
+        bool muted = ChkMuteSound.IsChecked == true;
+        int volume = (int)Math.Round(SliderSoundVolume.Value);
+
+        if (muted)
+        {
+            SetSoundStatus("O som está silenciado. Desmarque \"Silenciar o som da captura\" para ouvir.", isError: false);
+            return;
+        }
+        if (volume <= 0)
+        {
+            SetSoundStatus("O volume está em 0%. Aumente o volume para ouvir o som.", isError: false);
+            return;
+        }
+
+        SoundService.PreviewSound(soundId, volume, muted);
+        SetSoundStatus($"Reproduzindo a pré-visualização no volume {volume}%.", isError: false);
+    }
+
+    private async void BtnImportSound_Click(object sender, RoutedEventArgs e)
+    {
+        var dialog = new Microsoft.Win32.OpenFileDialog
+        {
+            Title = "Importar som de captura",
+            Filter = "Arquivos de áudio (*.wav;*.mp3)|*.wav;*.mp3",
+            CheckFileExists = true,
+            Multiselect = false
+        };
+
+        if (dialog.ShowDialog(this) != true) return;
+
+        BtnImportSound.IsEnabled = false;
+        SetSoundStatus("Importando e validando o áudio...", isError: false);
+
+        var (success, message, sound) = await SoundService.ImportCustomSoundAsync(dialog.FileName);
+        BtnImportSound.IsEnabled = true;
+
+        if (success && sound != null)
+        {
+            PopulateSoundList(SoundService.CustomPrefix + sound.Id);
+            SetSoundStatus($"{message} Clique em \"Salvar Configurações\" para usá-lo como som da captura.", isError: false);
+        }
+        else
+        {
+            SetSoundStatus(message, isError: true);
+        }
+    }
+
+    private void BtnRemoveSound_Click(object sender, RoutedEventArgs e)
+    {
+        if (CmbCaptureSound.SelectedItem is not SoundOption { IsCustom: true } option) return;
+
+        var confirm = System.Windows.MessageBox.Show(
+            $"Remover \"{option.DisplayName}\" da lista de sons importados?\n\nO arquivo copiado pelo CrankoShot será apagado (o original no seu computador não é afetado).",
+            "Remover som importado",
+            MessageBoxButton.YesNo,
+            MessageBoxImage.Question);
+        if (confirm != MessageBoxResult.Yes) return;
+
+        string id = option.Id[SoundService.CustomPrefix.Length..];
+        if (SoundService.RemoveCustomSound(id))
+        {
+            PopulateSoundList(SettingsService.Instance.Current.CaptureSoundId);
+            SetSoundStatus("Som importado removido.", isError: false);
+        }
+        else
+        {
+            SetSoundStatus("Não foi possível remover o som selecionado.", isError: true);
+        }
+    }
+
+    #endregion
 
     #region Atalhos & Teclado Handlers
 
@@ -803,13 +939,9 @@ public partial class SettingsWindow : Window
 
     private void CmbCursorSize_SelectionChanged(object sender, System.Windows.Controls.SelectionChangedEventArgs e)
     {
-        if (_isLoadingCrosshairUI || CmbCursorSize == null || SliderCrosshairLength == null) return;
-        SliderCrosshairLength.Value = CmbCursorSize.SelectedIndex switch
-        {
-            0 => 9,
-            2 => 18,
-            _ => 12
-        };
+        // A escala rápida é um multiplicador aplicado pelo CrosshairService sobre os valores individuais;
+        // não altera os controles deslizantes (evita aplicar a escala duas vezes).
+        if (_isLoadingCrosshairUI || CmbCursorSize == null) return;
         RefreshCrosshairLivePreview();
     }
 
@@ -852,7 +984,13 @@ public partial class SettingsWindow : Window
             CrosshairGap = (int)(SliderCrosshairGap?.Value ?? 4),
             CrosshairDotSize = (int)(SliderCrosshairDotSize?.Value ?? 3),
             CrosshairShowDot = ChkCrosshairShowDot?.IsChecked == true,
-            CrosshairOutline = ChkCrosshairOutline?.IsChecked == true
+            CrosshairOutline = ChkCrosshairOutline?.IsChecked == true,
+            CursorSize = CmbCursorSize?.SelectedIndex switch
+            {
+                0 => 14,
+                2 => 24,
+                _ => 18
+            }
         };
 
         byte[] mask = CrosshairService.BuildMask(tempSettings);
@@ -1418,6 +1556,14 @@ public partial class SettingsWindow : Window
             s.PlaySoundOnCapture = ChkPlaySound.IsChecked == true;
             s.ShowNotifications = ChkNotifications.IsChecked == true;
 
+            // Som da captura (a lista de sons importados já é persistida na importação/remoção)
+            if (CmbCaptureSound.SelectedValue is string selectedSoundId)
+            {
+                s.CaptureSoundId = selectedSoundId;
+            }
+            s.CaptureSoundVolume = (int)Math.Round(SliderSoundVolume.Value);
+            s.CaptureSoundMuted = ChkMuteSound.IsChecked == true;
+
             // Atalhos
             string selectedMod = GetSelectedModifier();
             string selectedKey = GetSelectedKey();
@@ -1510,13 +1656,13 @@ public partial class SettingsWindow : Window
             s.GeminiModel = GetSelectedModel();
             s.OpenRouterModel = GetSelectedOpenRouterModel();
             s.OpenRouterFreeModelsOnly = ChkOpenRouterFreeOnly.IsChecked == true;
-            s.AutoAnalyzeEnabled = ChkAutoAnalyze.IsChecked == true;
 
             // Tema de Cores
             s.AccentTheme = ThemeService.Instance.CurrentThemeName;
 
             // Salvar persistência
             SettingsService.Instance.Save();
+            SoundService.Warmup();
 
             System.Windows.MessageBox.Show("Configurações salvas com sucesso!", "CrankoShot", MessageBoxButton.OK, MessageBoxImage.Information);
             Close();

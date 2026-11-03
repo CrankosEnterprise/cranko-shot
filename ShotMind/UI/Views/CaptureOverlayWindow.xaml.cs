@@ -290,17 +290,19 @@ public partial class CaptureOverlayWindow : Window
         var settings = SettingsService.Instance.Current;
         _cachedCrosshairMask ??= CrosshairService.BuildMask(settings);
 
+        // O pixel central da mira (índice GridCenter) fica exatamente no pixel sob o cursor.
+        // Math.Floor (e não Round) evita deslocar a mira para o pixel vizinho quando a posição é fracionária.
         VisualCursorIndicator.RenderTransform = Transform.Identity;
-        Canvas.SetLeft(VisualCursorIndicator, Math.Round(pos.X) - CrosshairService.GridCenter);
-        Canvas.SetTop(VisualCursorIndicator, Math.Round(pos.Y) - CrosshairService.GridCenter);
+        Canvas.SetLeft(VisualCursorIndicator, Math.Floor(pos.X) - CrosshairService.GridCenter);
+        Canvas.SetTop(VisualCursorIndicator, Math.Floor(pos.Y) - CrosshairService.GridCenter);
 
         CursorOuterPath.Visibility = Visibility.Collapsed;
         CursorInnerPath.Visibility = Visibility.Collapsed;
         CursorInvertImage.Visibility = Visibility.Visible;
 
         bool hasSelection = !_selectionRect.IsEmpty;
-        int baseX = (int)Math.Round(pos.X);
-        int baseY = (int)Math.Round(pos.Y);
+        int baseX = (int)Math.Floor(pos.X);
+        int baseY = (int)Math.Floor(pos.Y);
 
         CrosshairService.RenderToBuffer(
             _cursorPixels,

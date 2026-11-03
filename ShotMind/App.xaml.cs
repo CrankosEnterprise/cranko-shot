@@ -105,6 +105,8 @@ public partial class App : Application
             }
             ThemeService.Instance.Initialize();
 
+            // Pré-carrega o som de captura em thread própria (não bloqueia a inicialização)
+            SoundService.Warmup();
             // 3. Tray Icon (initialized before async DB so tray & UI are immediately responsive)
             _trayManager = new TrayIconManager();
             _trayManager.CaptureRequested += TriggerCapture;

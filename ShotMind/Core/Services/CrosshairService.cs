@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Windows;
 using System.Windows.Media;
 using ShotMind.Core.Models;
@@ -34,35 +34,73 @@ public static class CrosshairService
         _ => string.Empty
     };
 
+
+    /// <summary>
+    /// Maior distância (em pixels, a partir do centro) que as linhas podem ocupar dentro da grade 80x80.
+    /// </summary>
+    private const int MaxExtent = 37;
+
+    /// <summary>
+    /// Multiplicador proporcional da "Escala rápida" (valor persistido em <see cref="AppSettings.CursorSize"/>).
+    /// </summary>
+    public static double GetScaleMultiplier(int cursorSize) => cursorSize switch
+    {
+        14 => 0.75,
+        24 => 1.5,
+        _ => 1.0
+    };
+
+    private static int ScaleValue(int value, double multiplier, int min)
+        => Math.Max(min, (int)Math.Round(value * multiplier, MidpointRounding.AwayFromZero));
+
+    /// <summary>
+    /// Geometria efetiva (em pixels) após aplicar a escala rápida UMA única vez sobre todos os
+    /// elementos: espessura, comprimento, abertura central e tamanho do ponto.
+    /// </summary>
+    public static (int Thickness, int Length, int Gap, int DotSize) GetScaledGeometry(AppSettings settings)
+    {
+        settings ??= new AppSettings();
+        double m = GetScaleMultiplier(settings.CursorSize);
+
+        int thickness = Math.Clamp(settings.CrosshairThickness <= 0 ? 2 : settings.CrosshairThickness, 1, 6);
+        int length = Math.Clamp(settings.CrosshairLength <= 0 ? 12 : settings.CrosshairLength, 4, 28);
+        int gap = Math.Clamp(settings.CrosshairGap < 0 ? 4 : settings.CrosshairGap, 0, 14);
+        int dot = Math.Clamp(settings.CrosshairDotSize <= 0 ? 3 : settings.CrosshairDotSize, 1, 10);
+
+        return (
+            ScaleValue(thickness, m, 1),
+            ScaleValue(length, m, 1),
+            ScaleValue(gap, m, gap > 0 ? 1 : 0),
+            ScaleValue(dot, m, 1));
+    }
+
     /// <summary>
     /// Builds an 80x80 classification mask for the configured crosshair geometry.
     /// 0 = transparent, 1 = crosshair stroke/dot pixel, 2 = 1px outline pixel.
+    /// A escala rápida (CursorSize) é aplicada aqui, uma única vez, para a prévia e para a mira real.
     /// </summary>
     public static byte[] BuildMask(AppSettings settings)
     {
         if (settings == null) settings = new AppSettings();
 
-        int scaleLength = settings.CrosshairLength > 0 ? settings.CrosshairLength : 12;
-        if (settings.CrosshairStyle == CrosshairStyle.Simple && settings.CursorSize is 14 or 18 or 24 && settings.CrosshairLength == 12)
-        {
-            scaleLength = settings.CursorSize switch
-            {
-                14 => 9,
-                24 => 16,
-                _ => 12
-            };
-        }
+        var g = GetScaledGeometry(settings);
 
         return BuildMask(
             settings.CrosshairStyle,
-            settings.CrosshairThickness,
-            scaleLength,
-            settings.CrosshairGap,
-            settings.CrosshairDotSize,
+            g.Thickness,
+            g.Length,
+            g.Gap,
+            g.DotSize,
             settings.CrosshairShowDot,
             settings.CrosshairOutline);
     }
 
+    /// <summary>
+    /// Todos os elementos são desenhados em torno de um único pivô (o pixel central da grade quando a
+    /// espessura é ímpar, ou o par de pixels centrais quando é par). O ponto central adota a mesma
+    /// paridade das linhas, e os braços usam a distância simétrica ao pivô, garantindo simetria
+    /// perfeita e centralização exata.
+    /// </summary>
     public static byte[] BuildMask(
         CrosshairStyle style,
         int thickness,
@@ -74,22 +112,19 @@ public static class CrosshairService
     {
         byte[] mask = new byte[GridSize * GridSize];
 
-        thickness = Math.Clamp(thickness, 1, 6);
-        length = Math.Clamp(length, 4, 28);
-        gap = Math.Clamp(gap, 0, 14);
-        dotSize = Math.Clamp(dotSize, 1, 10);
+        thickness = Math.Clamp(thickness, 1, 12);
+        length = Math.Clamp(length, 1, 60);
+        gap = Math.Clamp(gap, 0, 60);
+        dotSize = Math.Clamp(dotSize, 1, 20);
 
-        int halfLow = (thickness - 1) / 2;
-        int halfHigh = thickness / 2;
-        int minBand = GridCenter - halfLow;
-        int maxBand = GridCenter + halfHigh;
-
-        void SetStroke(int x, int y)
+        // Dentro da grade 80x80: se exceder o limite, reduz TODAS as dimensões na mesma proporção.
+        if (gap + length > MaxExtent)
         {
-            if (x >= 1 && x < GridSize - 1 && y >= 1 && y < GridSize - 1)
-            {
-                mask[y * GridSize + x] = PixelStroke;
-            }
+            double f = MaxExtent / (double)(gap + length);
+            length = Math.Max(1, (int)Math.Round(length * f, MidpointRounding.AwayFromZero));
+            gap = (int)Math.Round(gap * f, MidpointRounding.AwayFromZero);
+            thickness = Math.Max(1, (int)Math.Round(thickness * f, MidpointRounding.AwayFromZero));
+            dotSize = Math.Max(1, (int)Math.Round(dotSize * f, MidpointRounding.AwayFromZero));
         }
 
         bool drawLines = style != CrosshairStyle.CenterDot;
@@ -97,132 +132,71 @@ public static class CrosshairService
         {
             CrosshairStyle.CenterDot => true,
             CrosshairStyle.LinesAndDot => true,
-            CrosshairStyle.Open => showDot,
-            CrosshairStyle.Closed => showDot,
-            CrosshairStyle.Simple => showDot,
             _ => showDot
         };
 
-        if (drawLines)
+        // Pivô único: paridade da espessura quando há linhas; do próprio ponto quando é só o ponto.
+        bool evenPivot = drawLines ? thickness % 2 == 0 : dotSize % 2 == 0;
+        double cc = GridCenter + (evenPivot ? 0.5 : 0.0);
+
+        // O ponto precisa ter a mesma paridade do pivô para ficar exatamente centralizado nas linhas.
+        int dotEff = dotSize;
+        if (drawLines && (dotEff % 2 == 0) != evenPivot)
         {
-            if (style == CrosshairStyle.Closed)
-            {
-                int totalArm = length + (gap / 2);
-                int start = Math.Max(2, GridCenter - totalArm);
-                int end = Math.Min(GridSize - 3, GridCenter + totalArm);
-
-                // Vertical full line
-                for (int y = start; y <= end; y++)
-                {
-                    for (int x = minBand; x <= maxBand; x++)
-                    {
-                        SetStroke(x, y);
-                    }
-                }
-
-                // Horizontal full line
-                for (int x = start; x <= end; x++)
-                {
-                    for (int y = minBand; y <= maxBand; y++)
-                    {
-                        SetStroke(x, y);
-                    }
-                }
-            }
-            else
-            {
-                int effectiveGap = style switch
-                {
-                    CrosshairStyle.Simple => Math.Max(3, gap),
-                    CrosshairStyle.LinesAndDot => Math.Max(gap, (dotSize / 2) + 3),
-                    _ => Math.Max(2, gap)
-                };
-
-                if (drawCenterDot)
-                {
-                    effectiveGap = Math.Max(effectiveGap, (dotSize / 2) + 2);
-                }
-
-                int topStart = Math.Max(2, GridCenter - effectiveGap - length);
-                int topEnd = Math.Max(2, GridCenter - effectiveGap);
-
-                int bottomStart = Math.Min(GridSize - 3, GridCenter + effectiveGap);
-                int bottomEnd = Math.Min(GridSize - 3, GridCenter + effectiveGap + length);
-
-                // Top & Bottom arms
-                for (int y = topStart; y <= topEnd; y++)
-                {
-                    for (int x = minBand; x <= maxBand; x++)
-                    {
-                        SetStroke(x, y);
-                    }
-                }
-
-                for (int y = bottomStart; y <= bottomEnd; y++)
-                {
-                    for (int x = minBand; x <= maxBand; x++)
-                    {
-                        SetStroke(x, y);
-                    }
-                }
-
-                // Left & Right arms
-                int leftStart = Math.Max(2, GridCenter - effectiveGap - length);
-                int leftEnd = Math.Max(2, GridCenter - effectiveGap);
-
-                int rightStart = Math.Min(GridSize - 3, GridCenter + effectiveGap);
-                int rightEnd = Math.Min(GridSize - 3, GridCenter + effectiveGap + length);
-
-                for (int x = leftStart; x <= leftEnd; x++)
-                {
-                    for (int y = minBand; y <= maxBand; y++)
-                    {
-                        SetStroke(x, y);
-                    }
-                }
-
-                for (int x = rightStart; x <= rightEnd; x++)
-                {
-                    for (int y = minBand; y <= maxBand; y++)
-                    {
-                        SetStroke(x, y);
-                    }
-                }
-            }
+            dotEff++;
         }
 
-        if (drawCenterDot)
+        // Com ponto central, as linhas começam depois dele, deixando ao menos 1 pixel livre.
+        int effectiveGap = gap;
+        if (drawCenterDot && drawLines && style != CrosshairStyle.Closed)
         {
-            int dLow = (dotSize - 1) / 2;
-            int dHigh = dotSize / 2;
+            int dotMaxK = ((dotEff + 1) / 2) - 1;
+            effectiveGap = Math.Max(gap, dotMaxK + 2);
+        }
 
-            if (dotSize <= 3)
+        double halfBand = (thickness - 1) / 2.0 + 1e-6;
+        int closedExtentK = effectiveGap + length - 1;
+        double dotHalfSquare = (dotEff - 1) / 2.0 + 1e-6;
+        double dotRadius = dotEff / 2.0 + 0.15;
+        double dotRadiusSq = dotRadius * dotRadius;
+
+        for (int y = 1; y < GridSize - 1; y++)
+        {
+            double dy = y - cc;
+            int ky = (int)Math.Floor(Math.Abs(dy));
+            bool inBandY = Math.Abs(dy) <= halfBand;
+
+            for (int x = 1; x < GridSize - 1; x++)
             {
-                for (int y = GridCenter - dLow; y <= GridCenter + dHigh; y++)
+                double dx = x - cc;
+                int kx = (int)Math.Floor(Math.Abs(dx));
+                bool inBandX = Math.Abs(dx) <= halfBand;
+
+                bool stroke = false;
+
+                if (drawLines)
                 {
-                    for (int x = GridCenter - dLow; x <= GridCenter + dHigh; x++)
+                    if (style == CrosshairStyle.Closed)
                     {
-                        SetStroke(x, y);
+                        stroke = (inBandX && ky <= closedExtentK) || (inBandY && kx <= closedExtentK);
+                    }
+                    else
+                    {
+                        stroke = (inBandX && ky >= effectiveGap && ky < effectiveGap + length)
+                              || (inBandY && kx >= effectiveGap && kx < effectiveGap + length);
                     }
                 }
-            }
-            else
-            {
-                double centerCoord = GridCenter + (dotSize % 2 == 0 ? 0.5 : 0.0);
-                double radius = dotSize / 2.0 + 0.15;
-                double rSq = radius * radius;
 
-                for (int y = GridCenter - dotSize; y <= GridCenter + dotSize; y++)
+                if (!stroke && drawCenterDot)
                 {
-                    for (int x = GridCenter - dotSize; x <= GridCenter + dotSize; x++)
-                    {
-                        double dx = x - centerCoord;
-                        double dy = y - centerCoord;
-                        if (dx * dx + dy * dy <= rSq)
-                        {
-                            SetStroke(x, y);
-                        }
-                    }
+                    stroke = dotEff <= 3
+                        ? Math.Abs(dx) <= dotHalfSquare && Math.Abs(dy) <= dotHalfSquare
+                        : dx * dx + dy * dy <= dotRadiusSq;
+                }
+
+                if (stroke)
+                {
+                    mask[y * GridSize + x] = PixelStroke;
                 }
             }
         }

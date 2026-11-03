@@ -86,6 +86,20 @@ public class SettingsService
         if (s.SequenceCounter < 0) s.SequenceCounter = 0;
         s.ObfuscationIntensity = Math.Clamp(s.ObfuscationIntensity, 2, 64);
         if (s.CursorSize is not (14 or 18 or 24)) s.CursorSize = 18;
+        if (s.CrosshairScaleVersion < 1)
+        {
+            // Migração: antes a escala rápida sobrescrevia o comprimento (9 / 18). Agora ela é um
+            // multiplicador de todas as dimensões, então o comprimento volta ao valor-base para
+            // não aplicar a escala duas vezes.
+            if ((s.CursorSize == 14 && s.CrosshairLength == 9) || (s.CursorSize == 24 && s.CrosshairLength == 18))
+            {
+                s.CrosshairLength = 12;
+            }
+            s.CrosshairScaleVersion = 1;
+        }
+        s.CaptureSoundVolume = Math.Clamp(s.CaptureSoundVolume, 0, 100);
+        if (string.IsNullOrWhiteSpace(s.CaptureSoundId)) s.CaptureSoundId = "system";
+        s.CustomCaptureSounds ??= new();
         if (!Enum.IsDefined(typeof(CrosshairStyle), s.CrosshairStyle)) s.CrosshairStyle = CrosshairStyle.Simple;
         s.CrosshairThickness = Math.Clamp(s.CrosshairThickness <= 0 ? 2 : s.CrosshairThickness, 1, 6);
         s.CrosshairLength = Math.Clamp(s.CrosshairLength <= 0 ? 12 : s.CrosshairLength, 4, 28);
