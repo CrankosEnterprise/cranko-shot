@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Drawing;
 using System.Globalization;
@@ -47,6 +47,85 @@ public partial class CaptureOverlayWindow : Window
     private System.Drawing.Rectangle _virtualBounds;
     private Rect _selectionRect = Rect.Empty;
     private Rect _initialSelectionRect = Rect.Empty;
+
+    public Rect CurrentSelectionRect => _selectionRect;
+
+    public void SetSelectionForTesting(Rect r)
+    {
+        _selectionRect = r;
+        UpdateSelectionVisuals();
+        PositionToolbar();
+    }
+
+    /// <summary>
+    /// Calcula o ajuste fino (1 pixel) da área selecionada com as setas do teclado,
+    /// mantendo as dimensões atuais da seleção intactas e impedindo que ultrapasse os limites da tela.
+    /// </summary>
+    public static Rect NudgeSelection(Rect selection, Key key, double maxW, double maxH)
+    {
+        if (selection.IsEmpty || selection.Width <= 0 || selection.Height <= 0)
+            return selection;
+
+        double dx = 0;
+        double dy = 0;
+
+        switch (key)
+        {
+            case Key.Left:
+                dx = -1;
+                break;
+            case Key.Right:
+                dx = 1;
+                break;
+            case Key.Up:
+                dy = -1;
+                break;
+            case Key.Down:
+                dy = 1;
+                break;
+            default:
+                return selection;
+        }
+
+        double clampMaxW = Math.Max(0, maxW - selection.Width);
+        double clampMaxH = Math.Max(0, maxH - selection.Height);
+
+        double newLeft = Math.Clamp(selection.X + dx, 0, clampMaxW);
+        double newTop = Math.Clamp(selection.Y + dy, 0, clampMaxH);
+
+        return new Rect(newLeft, newTop, selection.Width, selection.Height);
+    }
+
+    public bool NudgeSelection(Key key)
+    {
+        if (_selectionRect.IsEmpty || _selectionRect.Width < 2 || _selectionRect.Height < 2)
+            return false;
+
+        if (key is not (Key.Left or Key.Right or Key.Up or Key.Down))
+            return false;
+
+        double maxW = ActualWidth > 0 ? ActualWidth : (_virtualBounds.Width > 0 ? _virtualBounds.Width : Width);
+        double maxH = ActualHeight > 0 ? ActualHeight : (_virtualBounds.Height > 0 ? _virtualBounds.Height : Height);
+
+        Rect updated = NudgeSelection(_selectionRect, key, maxW, maxH);
+        if (updated != _selectionRect)
+        {
+            _selectionRect = updated;
+            UpdateSelectionVisuals();
+            PositionToolbar();
+
+            if (VisualCursorIndicator.Visibility == Visibility.Visible)
+            {
+                try
+                {
+                    UpdateVisualCursor(Mouse.GetPosition(OverlayCanvas));
+                }
+                catch { }
+            }
+        }
+
+        return true;
+    }
 
     private InteractionMode _mode = InteractionMode.None;
     private HitZone _currentResizeZone = HitZone.None;
@@ -2112,8 +2191,24 @@ public partial class CaptureOverlayWindow : Window
                 CloseAndCleanup();
             }
             e.Handled = true;
+            return;
         }
-        else if (sm.IsActionTriggered(ShortcutManager.ActionCopy, e, settings))
+
+        // Ajuste fino da área de captura com setas (1 pixel por incremento / repetição contínua)
+        bool isTextInputActive = (InlineTextInput.Visibility == Visibility.Visible && InlineTextInput.IsFocused)
+            || FocusManager.GetFocusedElement(this) is System.Windows.Controls.Primitives.TextBoxBase;
+
+        if (!isTextInputActive && _mode == InteractionMode.None && !_selectionRect.IsEmpty && _selectionRect.Width >= 2 && _selectionRect.Height >= 2)
+        {
+            if (e.Key is Key.Left or Key.Right or Key.Up or Key.Down)
+            {
+                NudgeSelection(e.Key);
+                e.Handled = true;
+                return;
+            }
+        }
+
+        if (sm.IsActionTriggered(ShortcutManager.ActionCopy, e, settings))
         {
             if (!_selectionRect.IsEmpty && _selectionRect.Width >= 2 && _selectionRect.Height >= 2)
             {

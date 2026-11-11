@@ -1664,4 +1664,108 @@ public class ShotMindTests
                 $"{method} não pode iniciar análise de IA");
         }
     }
+
+    // ------------------------------------------------------------------
+    // Ajuste fino da seleção com as setas do teclado (NudgeSelection)
+    // ------------------------------------------------------------------
+
+    [TestMethod]
+    public void NudgeSelection_ArrowKeys_MoveSelectionExactlyOnePixel()
+    {
+        double maxW = 1920;
+        double maxH = 1080;
+        var initial = new System.Windows.Rect(100, 100, 200, 150);
+
+        var up = ShotMind.UI.Views.CaptureOverlayWindow.NudgeSelection(initial, System.Windows.Input.Key.Up, maxW, maxH);
+        Assert.AreEqual(100, up.X, 0.001);
+        Assert.AreEqual(99, up.Y, 0.001);
+        Assert.AreEqual(200, up.Width, 0.001);
+        Assert.AreEqual(150, up.Height, 0.001);
+
+        var down = ShotMind.UI.Views.CaptureOverlayWindow.NudgeSelection(initial, System.Windows.Input.Key.Down, maxW, maxH);
+        Assert.AreEqual(100, down.X, 0.001);
+        Assert.AreEqual(101, down.Y, 0.001);
+        Assert.AreEqual(200, down.Width, 0.001);
+        Assert.AreEqual(150, down.Height, 0.001);
+
+        var left = ShotMind.UI.Views.CaptureOverlayWindow.NudgeSelection(initial, System.Windows.Input.Key.Left, maxW, maxH);
+        Assert.AreEqual(99, left.X, 0.001);
+        Assert.AreEqual(100, left.Y, 0.001);
+        Assert.AreEqual(200, left.Width, 0.001);
+        Assert.AreEqual(150, left.Height, 0.001);
+
+        var right = ShotMind.UI.Views.CaptureOverlayWindow.NudgeSelection(initial, System.Windows.Input.Key.Right, maxW, maxH);
+        Assert.AreEqual(101, right.X, 0.001);
+        Assert.AreEqual(100, right.Y, 0.001);
+        Assert.AreEqual(200, right.Width, 0.001);
+        Assert.AreEqual(150, right.Height, 0.001);
+    }
+
+    [TestMethod]
+    public void NudgeSelection_BoundaryClamping_DoesNotExceedScreenBounds()
+    {
+        double maxW = 1920;
+        double maxH = 1080;
+
+        // Top-left corner
+        var atOrigin = new System.Windows.Rect(0, 0, 100, 100);
+        var upClamped = ShotMind.UI.Views.CaptureOverlayWindow.NudgeSelection(atOrigin, System.Windows.Input.Key.Up, maxW, maxH);
+        Assert.AreEqual(0, upClamped.X, 0.001);
+        Assert.AreEqual(0, upClamped.Y, 0.001);
+
+        var leftClamped = ShotMind.UI.Views.CaptureOverlayWindow.NudgeSelection(atOrigin, System.Windows.Input.Key.Left, maxW, maxH);
+        Assert.AreEqual(0, leftClamped.X, 0.001);
+        Assert.AreEqual(0, leftClamped.Y, 0.001);
+
+        // Bottom-right corner
+        var atBottomRight = new System.Windows.Rect(1820, 980, 100, 100);
+        var downClamped = ShotMind.UI.Views.CaptureOverlayWindow.NudgeSelection(atBottomRight, System.Windows.Input.Key.Down, maxW, maxH);
+        Assert.AreEqual(1820, downClamped.X, 0.001);
+        Assert.AreEqual(980, downClamped.Y, 0.001);
+
+        var rightClamped = ShotMind.UI.Views.CaptureOverlayWindow.NudgeSelection(atBottomRight, System.Windows.Input.Key.Right, maxW, maxH);
+        Assert.AreEqual(1820, rightClamped.X, 0.001);
+        Assert.AreEqual(980, rightClamped.Y, 0.001);
+    }
+
+    [TestMethod]
+    public void NudgeSelection_DimensionsPreserved_NeverChangesWidthOrHeight()
+    {
+        double maxW = 1000;
+        double maxH = 1000;
+        var rect = new System.Windows.Rect(50, 50, 123.45, 67.89);
+
+        // Simula deslocamento contínuo mantendo tecla pressionada
+        for (int i = 0; i < 40; i++)
+        {
+            rect = ShotMind.UI.Views.CaptureOverlayWindow.NudgeSelection(rect, System.Windows.Input.Key.Right, maxW, maxH);
+            Assert.AreEqual(123.45, rect.Width, 0.001);
+            Assert.AreEqual(67.89, rect.Height, 0.001);
+        }
+        Assert.AreEqual(90, rect.X, 0.001);
+
+        for (int i = 0; i < 25; i++)
+        {
+            rect = ShotMind.UI.Views.CaptureOverlayWindow.NudgeSelection(rect, System.Windows.Input.Key.Down, maxW, maxH);
+            Assert.AreEqual(123.45, rect.Width, 0.001);
+            Assert.AreEqual(67.89, rect.Height, 0.001);
+        }
+        Assert.AreEqual(75, rect.Y, 0.001);
+    }
+
+    [TestMethod]
+    public void NudgeSelection_EmptyOrInvalidRect_ReturnsUnchanged()
+    {
+        var empty = System.Windows.Rect.Empty;
+        var res = ShotMind.UI.Views.CaptureOverlayWindow.NudgeSelection(empty, System.Windows.Input.Key.Up, 1920, 1080);
+        Assert.IsTrue(res.IsEmpty);
+
+        var nonArrow = ShotMind.UI.Views.CaptureOverlayWindow.NudgeSelection(
+            new System.Windows.Rect(10, 10, 50, 50),
+            System.Windows.Input.Key.Space,
+            1920,
+            1080);
+        Assert.AreEqual(10, nonArrow.X, 0.001);
+        Assert.AreEqual(10, nonArrow.Y, 0.001);
+    }
 }
