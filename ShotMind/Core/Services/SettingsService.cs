@@ -19,6 +19,8 @@ public class SettingsService
     private static SettingsService? _instance;
     public static SettingsService Instance => _instance ??= new SettingsService();
 
+    public event Action<AppSettings>? SettingsSaved;
+
     public AppSettings Current { get; private set; } = new();
 
     static SettingsService()
@@ -56,8 +58,8 @@ public class SettingsService
         {
             s.AccentTheme = "Gray";
         }
-        string defaultPicturesDir = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.MyPictures), "ShotMind");
-        if (string.IsNullOrWhiteSpace(s.DefaultSaveDirectory))
+        string defaultPicturesDir = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.MyPictures), "CrankoShot");
+        if (string.IsNullOrWhiteSpace(s.DefaultSaveDirectory) || s.DefaultSaveDirectory.EndsWith(@"\ShotMind", StringComparison.OrdinalIgnoreCase))
         {
             s.DefaultSaveDirectory = defaultPicturesDir;
         }
@@ -80,7 +82,14 @@ public class SettingsService
             }
             catch { }
         }
-        if (string.IsNullOrWhiteSpace(s.FilenamePattern)) s.FilenamePattern = "ShotMind_{yyyy-MM-dd_HH-mm-ss}";
+        if (string.IsNullOrWhiteSpace(s.FilenamePattern))
+        {
+            s.FilenamePattern = "CrankoShot_{yyyy-MM-dd_HH-mm-ss}";
+        }
+        else if (s.FilenamePattern.StartsWith("ShotMind_", StringComparison.OrdinalIgnoreCase) || s.FilenamePattern.StartsWith("ShotPrint_", StringComparison.OrdinalIgnoreCase))
+        {
+            s.FilenamePattern = "CrankoShot_" + s.FilenamePattern.Substring(s.FilenamePattern.IndexOf('_') + 1);
+        }
         s.JpgQuality = Math.Clamp(s.JpgQuality, 10, 100);
         s.SequenceDigits = Math.Clamp(s.SequenceDigits, 1, 6);
         if (s.SequenceCounter < 0) s.SequenceCounter = 0;
@@ -242,6 +251,11 @@ public class SettingsService
                 // Substituição atômica segura
                 File.Move(SettingsTempFilePath, SettingsFilePath, overwrite: true);
                 Logger.Info("Configurações salvas atomicamente com sucesso.");
+                try
+                {
+                    SettingsSaved?.Invoke(Current);
+                }
+                catch { }
                 return true;
             }
             catch (Exception ex)

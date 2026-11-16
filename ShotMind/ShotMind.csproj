@@ -16,6 +16,7 @@
     <AssemblyTitle>CrankoShot</AssemblyTitle>
     <Description>CrankoShot — Captura de Tela &amp; Inteligência Visual</Description>
     <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+    <NoWarn>$(NoWarn);WFAC010</NoWarn>
     <RuntimeIdentifiers>win-x64</RuntimeIdentifiers>
   </PropertyGroup>
 

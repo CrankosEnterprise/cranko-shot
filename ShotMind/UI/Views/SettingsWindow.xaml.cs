@@ -68,6 +68,28 @@ public partial class SettingsWindow : Window
     {
         LoadSettingsIntoUI();
         LoadOcrInfo();
+        SettingsService.Instance.SettingsSaved += OnSettingsSavedExternally;
+        this.Closed += (s, ev) => SettingsService.Instance.SettingsSaved -= OnSettingsSavedExternally;
+    }
+
+    private void OnSettingsSavedExternally(AppSettings s)
+    {
+        if (!Dispatcher.CheckAccess())
+        {
+            if (Dispatcher.HasShutdownStarted || !Dispatcher.Thread.IsAlive) return;
+            try
+            {
+                Dispatcher.BeginInvoke(new Action(() => OnSettingsSavedExternally(s)));
+            }
+            catch { }
+            return;
+        }
+
+        if (TxtSequenceCounter != null && !TxtSequenceCounter.IsFocused)
+        {
+            TxtSequenceCounter.Text = s.SequenceCounter.ToString();
+            UpdateFilenamePreview();
+        }
     }
 
     private void NavSidebar_SelectionChanged(object sender, System.Windows.Controls.SelectionChangedEventArgs e)
@@ -151,7 +173,7 @@ public partial class SettingsWindow : Window
         TxtSaveDirectory.Text = s.DefaultSaveDirectory;
         SetComboBoxItem(CmbImageFormat, (int)s.DefaultFormat);
         TxtJpgQuality.Text = s.JpgQuality.ToString();
-        TxtFilenamePattern.Text = string.IsNullOrWhiteSpace(s.FilenamePattern) ? "ShotMind_{yyyy-MM-dd_HH-mm-ss}" : s.FilenamePattern;
+        TxtFilenamePattern.Text = string.IsNullOrWhiteSpace(s.FilenamePattern) ? "CrankoShot_{yyyy-MM-dd_HH-mm-ss}" : s.FilenamePattern;
         TxtSequenceCounter.Text = s.SequenceCounter.ToString();
         SetComboBoxItem(CmbSequenceDigits, Math.Clamp(s.SequenceDigits - 1, 0, 4));
         UpdateFilenamePreview();
@@ -1681,7 +1703,7 @@ public partial class SettingsWindow : Window
                 s.JpgQuality = Math.Clamp(quality, 10, 100);
             }
 
-            s.FilenamePattern = string.IsNullOrWhiteSpace(TxtFilenamePattern.Text) ? "ShotMind_{yyyy-MM-dd_HH-mm-ss}" : TxtFilenamePattern.Text.Trim();
+            s.FilenamePattern = string.IsNullOrWhiteSpace(TxtFilenamePattern.Text) ? "CrankoShot_{yyyy-MM-dd_HH-mm-ss}" : TxtFilenamePattern.Text.Trim();
             if (int.TryParse(TxtSequenceCounter.Text, out int sequence) && sequence >= 0)
             {
                 s.SequenceCounter = sequence;

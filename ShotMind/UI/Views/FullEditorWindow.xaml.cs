@@ -169,10 +169,19 @@ public partial class FullEditorWindow : Window
     {
         if (_currentBitmap == null) return;
 
+        var settings = SettingsService.Instance.Current;
+        int nextSeq = ExportService.GetNextAvailableSequenceNumber(
+            settings.DefaultSaveDirectory,
+            settings.FilenamePattern,
+            settings.DefaultFormat,
+            settings.SequenceCounter,
+            settings.SequenceDigits);
+
         var sfd = new SaveFileDialog
         {
             Filter = "Imagem PNG (*.png)|*.png|Imagem JPEG (*.jpg)|*.jpg",
-            FileName = string.IsNullOrEmpty(_currentFilePath) ? ExportService.GenerateFileName("ShotMind_{yyyy-MM-dd_HH-mm-ss}", ImageFormatType.Png) : Path.GetFileName(_currentFilePath),
+            FileName = string.IsNullOrEmpty(_currentFilePath) ? ExportService.GenerateFileName(settings.FilenamePattern, settings.DefaultFormat, nextSeq) : Path.GetFileName(_currentFilePath),
+            InitialDirectory = settings.DefaultSaveDirectory,
             Title = "Salvar Imagem Como..."
         };
 
@@ -195,6 +204,28 @@ public partial class FullEditorWindow : Window
             _currentFilePath = path;
             _hasUnsavedChanges = false;
             StatusInfo.Text = $"Salvo: {Path.GetFileName(path)}";
+
+            // Atualiza o contador de numeração se o arquivo foi salvo com padrão sequencial
+            var settings = SettingsService.Instance.Current;
+            string savedDir = Path.GetDirectoryName(path) ?? settings.DefaultSaveDirectory;
+            string savedNameWithoutExt = Path.GetFileNameWithoutExtension(path);
+            var match = System.Text.RegularExpressions.Regex.Match(savedNameWithoutExt, @"[_-](\d+)$|(\d+)$");
+            if (match.Success)
+            {
+                string numStr = match.Groups[1].Success ? match.Groups[1].Value : match.Groups[2].Value;
+                if (int.TryParse(numStr, out int parsed))
+                {
+                    int nextAvailable = ExportService.GetNextAvailableSequenceNumber(
+                        savedDir,
+                        settings.FilenamePattern,
+                        fmt,
+                        parsed + 1,
+                        settings.SequenceDigits);
+
+                    settings.SequenceCounter = nextAvailable;
+                    SettingsService.Instance.Save();
+                }
+            }
 
             MessageBox.Show("Imagem salva com sucesso!", "CrankoShot", MessageBoxButton.OK, MessageBoxImage.Information);
         }

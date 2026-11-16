@@ -809,8 +809,9 @@
                                 <WrapPanel Margin="0,0,0,10">
                                     <Button Style="{StaticResource ChipButtonStyle}" MinHeight="30" Height="Auto" Content="CrankoShot_{yyyy-MM-dd_HH-mm-ss}" Margin="0,0,6,6" Tag="CrankoShot_{yyyy-MM-dd_HH-mm-ss}" Click="BtnPresetFilename_Click"/>
                                     <Button Style="{StaticResource ChipButtonStyle}" MinHeight="30" Height="Auto" Content="Captura_{yyyy-MM-dd}_{HH-mm-ss}" Margin="0,0,6,6" Tag="Captura_{yyyy-MM-dd}_{HH-mm-ss}" Click="BtnPresetFilename_Click"/>
-                                    <Button Style="{StaticResource ChipButtonStyle}" MinHeight="30" Height="Auto" Content="Print_{dd-MM-yyyy}_{HH-mm}" Margin="0,0,6,6" Tag="Print_{dd-MM-yyyy}_{HH-mm}" Click="BtnPresetFilename_Click"/>
+                                    <Button Style="{StaticResource ChipButtonStyle}" MinHeight="30" Height="Auto" Content="CrankoShot_{dd-MM-yyyy}_{HH-mm}" Margin="0,0,6,6" Tag="CrankoShot_{dd-MM-yyyy}_{HH-mm}" Click="BtnPresetFilename_Click"/>
                                     <Button Style="{StaticResource ChipButtonStyle}" MinHeight="30" Height="Auto" Content="CrankoShot_{seq}" Margin="0,0,6,6" Tag="CrankoShot_{seq}" Click="BtnPresetFilename_Click"/>
+                                    <Button Style="{StaticResource ChipButtonStyle}" MinHeight="30" Height="Auto" Content="Captura_{seq}" Margin="0,0,6,6" Tag="Captura_{seq}" Click="BtnPresetFilename_Click"/>
                                 </WrapPanel>
 
                                 <!-- Variáveis -->

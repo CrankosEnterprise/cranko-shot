@@ -105,7 +105,81 @@ public static class ExportService
         }
     }
 
-    public static Bitmap RenderAnnotatedBitmap(Bitmap baseBitmap, IEnumerable<AnnotationItem> annotations)
+    /// <summary>
+    /// Identifica o próximo número sequencial disponível para uma pasta e padrão de nomenclatura,
+    /// garantindo que nenhum arquivo existente seja sobrescrito e que o contador aumente automaticamente.
+    /// </summary>
+    public static int GetNextAvailableSequenceNumber(string directory, string pattern, ImageFormatType format, int startingNumber, int digits)
+    {
+        int candidate = Math.Max(1, startingNumber);
+        digits = Math.Clamp(digits, 1, 6);
+
+        if (string.IsNullOrWhiteSpace(directory))
+        {
+            return candidate;
+        }
+
+        try
+        {
+            if (!Directory.Exists(directory))
+            {
+                return candidate;
+            }
+
+            var files = Directory.GetFiles(directory);
+            var fileNamesSet = new HashSet<string>(files.Select(Path.GetFileName).Where(n => n != null).Select(n => n!), StringComparer.OrdinalIgnoreCase);
+
+            // Identifica o maior número existente entre arquivos da pasta
+            int highestFound = 0;
+            foreach (var file in files)
+            {
+                string nameWithoutExt = Path.GetFileNameWithoutExtension(file);
+                var match = System.Text.RegularExpressions.Regex.Match(nameWithoutExt, @"[_-](\d+)$|(\d+)$");
+                if (match.Success)
+                {
+                    string numStr = match.Groups[1].Success ? match.Groups[1].Value : match.Groups[2].Value;
+                    if (int.TryParse(numStr, out int parsedNum))
+                    {
+                        if (parsedNum > highestFound)
+                        {
+                            highestFound = parsedNum;
+                        }
+                    }
+                }
+            }
+
+            if (highestFound >= candidate)
+            {
+                candidate = highestFound + 1;
+            }
+
+            // Testa candidatos para garantir ausência total de colisão com arquivos existentes (.png ou .jpg)
+            for (int guard = 0; guard < 10000; guard++)
+            {
+                string pngName = GenerateFileName(pattern, "png", candidate);
+                string jpgName = GenerateFileName(pattern, "jpg", candidate);
+
+                if (fileNamesSet.Contains(pngName) || fileNamesSet.Contains(jpgName) ||
+                    File.Exists(Path.Combine(directory, pngName)) || File.Exists(Path.Combine(directory, jpgName)))
+                {
+                    candidate++;
+                }
+                else
+                {
+                    break;
+                }
+            }
+
+            return candidate;
+        }
+        catch (Exception ex)
+        {
+            Logger.Warn($"Erro ao calcular próximo número sequencial em '{directory}': {ex.Message}");
+            return candidate;
+        }
+    }
+
+    public static Bitmap RenderAnnotatedBitmap(Bitmap baseBitmap, IEnumerable<AnnotationItem> annotations, double scaleX = 1.0, double scaleY = 1.0)
     {
         var result = new Bitmap(baseBitmap.Width, baseBitmap.Height, PixelFormat.Format32bppArgb);
 
@@ -119,7 +193,13 @@ public static class ExportService
             // 1. Draw base image
             g.DrawImage(baseBitmap, 0, 0, baseBitmap.Width, baseBitmap.Height);
 
-            // 2. Draw annotations in order
+            // 2. Escala proporcional para anotações quando a janela utiliza DPI scaling
+            if (Math.Abs(scaleX - 1.0) > 0.001 || Math.Abs(scaleY - 1.0) > 0.001)
+            {
+                g.ScaleTransform((float)scaleX, (float)scaleY);
+            }
+
+            // 3. Draw annotations in order
             foreach (var item in annotations)
             {
                 DrawAnnotation(g, result, item);

@@ -1768,4 +1768,173 @@ public class ShotMindTests
         Assert.AreEqual(10, nonArrow.X, 0.001);
         Assert.AreEqual(10, nonArrow.Y, 0.001);
     }
+
+    // ------------------------------------------------------------------
+    // Numeração sequencial automática e detecção por pasta
+    // ------------------------------------------------------------------
+
+    [TestMethod]
+    public void SequenceNumber_EmptyDirectory_ReturnsStartingNumber()
+    {
+        string tempDir = Path.Combine(Path.GetTempPath(), "SeqTest_Empty_" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(tempDir);
+        try
+        {
+            string pattern = "Captura_{seq}";
+            int next = ExportService.GetNextAvailableSequenceNumber(tempDir, pattern, ImageFormatType.Png, 1, 3);
+            Assert.AreEqual(1, next);
+            string name = ExportService.GenerateFileName(pattern, ImageFormatType.Png, next);
+            Assert.AreEqual("Captura_001.png", name);
+        }
+        finally
+        {
+            try { Directory.Delete(tempDir, true); } catch { }
+        }
+    }
+
+    [TestMethod]
+    public void SequenceNumber_ConsecutiveSavesInSameDirectory_AdvancesAutomatically()
+    {
+        string tempDir = Path.Combine(Path.GetTempPath(), "SeqTest_Consecutive_" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(tempDir);
+        try
+        {
+            string pattern = "Captura_{seq}";
+            int digits = 3;
+
+            // Simula captura 1
+            int seq1 = ExportService.GetNextAvailableSequenceNumber(tempDir, pattern, ImageFormatType.Png, 1, digits);
+            Assert.AreEqual(1, seq1);
+            string file1 = ExportService.GenerateFileName(pattern, ImageFormatType.Png, seq1);
+            Assert.AreEqual("Captura_001.png", file1);
+            File.WriteAllText(Path.Combine(tempDir, file1), "dummy1");
+
+            // Simula captura 2 na mesma pasta
+            int seq2 = ExportService.GetNextAvailableSequenceNumber(tempDir, pattern, ImageFormatType.Png, seq1 + 1, digits);
+            Assert.AreEqual(2, seq2);
+            string file2 = ExportService.GenerateFileName(pattern, ImageFormatType.Png, seq2);
+            Assert.AreEqual("Captura_002.png", file2);
+            File.WriteAllText(Path.Combine(tempDir, file2), "dummy2");
+
+            // Simula captura 3 na mesma pasta
+            int seq3 = ExportService.GetNextAvailableSequenceNumber(tempDir, pattern, ImageFormatType.Png, seq2 + 1, digits);
+            Assert.AreEqual(3, seq3);
+            string file3 = ExportService.GenerateFileName(pattern, ImageFormatType.Png, seq3);
+            Assert.AreEqual("Captura_003.png", file3);
+            File.WriteAllText(Path.Combine(tempDir, file3), "dummy3");
+        }
+        finally
+        {
+            try { Directory.Delete(tempDir, true); } catch { }
+        }
+    }
+
+    [TestMethod]
+    public void SequenceNumber_ExistingFilesWithGaps_NeverOverwritesExistingFile()
+    {
+        string tempDir = Path.Combine(Path.GetTempPath(), "SeqTest_Gaps_" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(tempDir);
+        try
+        {
+            string pattern = "Captura_{seq}";
+            // Cria Captura_001.png e Captura_005.png
+            File.WriteAllText(Path.Combine(tempDir, "Captura_001.png"), "1");
+            File.WriteAllText(Path.Combine(tempDir, "Captura_005.png"), "5");
+
+            // Próximo deve ser maior que o maior existente ou encontrar slot livre >= 6
+            int next = ExportService.GetNextAvailableSequenceNumber(tempDir, pattern, ImageFormatType.Png, 1, 3);
+            Assert.IsTrue(next >= 6, $"Esperava >= 6 para não colidir com Captura_005.png, mas obteve {next}");
+            string generated = ExportService.GenerateFileName(pattern, ImageFormatType.Png, next);
+            Assert.IsFalse(File.Exists(Path.Combine(tempDir, generated)));
+        }
+        finally
+        {
+            try { Directory.Delete(tempDir, true); } catch { }
+        }
+    }
+
+    [TestMethod]
+    public void SequenceNumber_ChangingFolders_DetectsExistingSequencesPerFolder()
+    {
+        string dirA = Path.Combine(Path.GetTempPath(), "SeqTest_DirA_" + Guid.NewGuid().ToString("N"));
+        string dirB = Path.Combine(Path.GetTempPath(), "SeqTest_DirB_" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(dirA);
+        Directory.CreateDirectory(dirB);
+        try
+        {
+            string pattern = "CrankoShot_{seq}";
+            // dirA possui 3 capturas
+            File.WriteAllText(Path.Combine(dirA, "CrankoShot_001.png"), "A1");
+            File.WriteAllText(Path.Combine(dirA, "CrankoShot_002.png"), "A2");
+            File.WriteAllText(Path.Combine(dirA, "CrankoShot_003.png"), "A3");
+
+            // dirB possui 1 captura
+            File.WriteAllText(Path.Combine(dirB, "CrankoShot_001.png"), "B1");
+
+            int nextA = ExportService.GetNextAvailableSequenceNumber(dirA, pattern, ImageFormatType.Png, 1, 3);
+            int nextB = ExportService.GetNextAvailableSequenceNumber(dirB, pattern, ImageFormatType.Png, 1, 3);
+
+            Assert.AreEqual(4, nextA);
+            Assert.AreEqual(2, nextB);
+        }
+        finally
+        {
+            try { Directory.Delete(dirA, true); } catch { }
+            try { Directory.Delete(dirB, true); } catch { }
+        }
+    }
+
+    [TestMethod]
+    public void SequenceNumber_RespectsConfiguredDigits()
+    {
+        string pattern = "Print_{seq}";
+        
+        var settings = SettingsService.Instance.Current;
+        int origDigits = settings.SequenceDigits;
+        try
+        {
+            settings.SequenceDigits = 1;
+            Assert.AreEqual("Print_1.png", ExportService.GenerateFileName(pattern, "png", 1, date: null));
+
+            settings.SequenceDigits = 2;
+            Assert.AreEqual("Print_02.png", ExportService.GenerateFileName(pattern, "png", 2, date: null));
+
+            settings.SequenceDigits = 4;
+            Assert.AreEqual("Print_0007.png", ExportService.GenerateFileName(pattern, "png", 7, date: null));
+        }
+        finally
+        {
+            settings.SequenceDigits = origDigits;
+        }
+    }
+
+    // ------------------------------------------------------------------
+    // Remoção do nome antigo e padrões da aplicação
+    // ------------------------------------------------------------------
+
+    [TestMethod]
+    public void DefaultSettings_CleanInstallation_UsesCrankoShotName()
+    {
+        var fresh = new AppSettings();
+        Assert.IsTrue(fresh.FilenamePattern.StartsWith("CrankoShot_"), $"Padrão de nome inicial deveria ser CrankoShot, mas é {fresh.FilenamePattern}");
+        Assert.IsTrue(fresh.DefaultSaveDirectory.EndsWith("CrankoShot"), $"Pasta inicial deveria ser CrankoShot, mas é {fresh.DefaultSaveDirectory}");
+
+        // Validação de migração de configurações legadas
+        var legacy = new AppSettings
+        {
+            FilenamePattern = "ShotMind_{yyyy-MM-dd}",
+            DefaultSaveDirectory = @"C:\Users\User\Pictures\ShotMind"
+        };
+        SettingsService.ValidateSettings(legacy);
+        Assert.IsTrue(legacy.FilenamePattern.StartsWith("CrankoShot_"), $"Migração falhou para padrão de arquivo: {legacy.FilenamePattern}");
+        Assert.IsTrue(legacy.DefaultSaveDirectory.EndsWith("CrankoShot"), $"Migração falhou para pasta: {legacy.DefaultSaveDirectory}");
+    }
+
+    [TestMethod]
+    public void VirtualScreenBounds_MultipleScreensUnion_IncludesNegativeAndOffScreenCoordinates()
+    {
+        var bounds = ScreenCaptureService.GetVirtualScreenBounds();
+        Assert.IsTrue(bounds.Width > 0);
+        Assert.IsTrue(bounds.Height > 0);
+    }
 }

@@ -13,7 +13,7 @@
 
     <Grid x:Name="RootGrid" ClipToBounds="True">
         <!-- Frozen screen snapshot background -->
-        <Image x:Name="BackgroundImage" Stretch="None" HorizontalAlignment="Left" VerticalAlignment="Top" />
+        <Image x:Name="BackgroundImage" Stretch="Fill" HorizontalAlignment="Left" VerticalAlignment="Top" />
 
         <!-- Canvas for dimming mask, selection rectangle, drawing annotations and toolbars -->
         <Canvas x:Name="OverlayCanvas"

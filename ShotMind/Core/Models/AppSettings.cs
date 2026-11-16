@@ -44,10 +44,10 @@ public class AppSettings
 
     // Captura e Salvamento
     public DefaultCaptureAction DefaultAction { get; set; } = DefaultCaptureAction.CopyToClipboard;
-    public string DefaultSaveDirectory { get; set; } = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.MyPictures), "ShotMind");
+    public string DefaultSaveDirectory { get; set; } = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.MyPictures), "CrankoShot");
     public ImageFormatType DefaultFormat { get; set; } = ImageFormatType.Png;
     public int JpgQuality { get; set; } = 92;
-    public string FilenamePattern { get; set; } = "ShotMind_{yyyy-MM-dd_HH-mm-ss}";
+    public string FilenamePattern { get; set; } = "CrankoShot_{yyyy-MM-dd_HH-mm-ss}";
     public int SequenceCounter { get; set; } = 1;
     public int SequenceDigits { get; set; } = 3;
     public bool CloseOverlayAfterAction { get; set; } = true;

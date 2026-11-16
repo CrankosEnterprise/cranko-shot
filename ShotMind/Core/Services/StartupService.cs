@@ -7,7 +7,8 @@ namespace ShotMind.Core.Services;
 
 public static class StartupService
 {
-    private const string AppName = "ShotMind";
+    private const string AppName = "CrankoShot";
+    private const string LegacyAppName = "ShotMind";
     private const string RunRegistryKey = @"Software\Microsoft\Windows\CurrentVersion\Run";
 
     public static bool IsRunOnStartupEnabled()
@@ -15,7 +16,7 @@ public static class StartupService
         try
         {
             using var key = Registry.CurrentUser.OpenSubKey(RunRegistryKey, false);
-            var value = key?.GetValue(AppName);
+            var value = key?.GetValue(AppName) ?? key?.GetValue(LegacyAppName);
             return value != null;
         }
         catch (Exception ex)
@@ -32,13 +33,19 @@ public static class StartupService
             using var key = Registry.CurrentUser.CreateSubKey(RunRegistryKey, true);
             if (key == null) return;
 
+            // Remove valor legado se existir
+            if (key.GetValue(LegacyAppName) != null)
+            {
+                key.DeleteValue(LegacyAppName, false);
+            }
+
             if (enable)
             {
                 string? exePath = Environment.ProcessPath ?? Process.GetCurrentProcess().MainModule?.FileName;
                 if (!string.IsNullOrEmpty(exePath) && File.Exists(exePath))
                 {
                     key.SetValue(AppName, $"\"{exePath}\" --background");
-                    Logger.Info("ShotMind configurado para iniciar com o Windows.");
+                    Logger.Info("CrankoShot configurado para iniciar com o Windows.");
                 }
             }
             else
@@ -46,7 +53,7 @@ public static class StartupService
                 if (key.GetValue(AppName) != null)
                 {
                     key.DeleteValue(AppName, false);
-                    Logger.Info("ShotMind removido da inicialização do Windows.");
+                    Logger.Info("CrankoShot removido da inicialização do Windows.");
                 }
             }
         }

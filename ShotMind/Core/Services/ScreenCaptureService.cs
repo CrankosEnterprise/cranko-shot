@@ -11,7 +11,37 @@ public static class ScreenCaptureService
 {
     public static Rectangle GetVirtualScreenBounds()
     {
-        return SystemInformation.VirtualScreen;
+        var screens = Screen.AllScreens;
+        if (screens == null || screens.Length == 0)
+        {
+            return SystemInformation.VirtualScreen;
+        }
+
+        int minX = int.MaxValue;
+        int minY = int.MaxValue;
+        int maxX = int.MinValue;
+        int maxY = int.MinValue;
+
+        foreach (var s in screens)
+        {
+            var b = s.Bounds;
+            minX = Math.Min(minX, b.Left);
+            minY = Math.Min(minY, b.Top);
+            maxX = Math.Max(maxX, b.Right);
+            maxY = Math.Max(maxY, b.Bottom);
+        }
+
+        // União com SystemInformation.VirtualScreen para garantir cobertura integral da área de trabalho
+        var sysVirtual = SystemInformation.VirtualScreen;
+        minX = Math.Min(minX, sysVirtual.Left);
+        minY = Math.Min(minY, sysVirtual.Top);
+        maxX = Math.Max(maxX, sysVirtual.Right);
+        maxY = Math.Max(maxY, sysVirtual.Bottom);
+
+        int totalWidth = Math.Max(1, maxX - minX);
+        int totalHeight = Math.Max(1, maxY - minY);
+
+        return new Rectangle(minX, minY, totalWidth, totalHeight);
     }
 
     public static Bitmap CaptureVirtualScreen()
@@ -21,7 +51,39 @@ public static class ScreenCaptureService
 
         using (var g = Graphics.FromImage(bitmap))
         {
-            g.CopyFromScreen(bounds.Left, bounds.Top, 0, 0, bounds.Size, CopyPixelOperation.SourceCopy);
+            g.Clear(System.Drawing.Color.Black);
+
+            var screens = Screen.AllScreens;
+            if (screens != null && screens.Length > 1)
+            {
+                // Em configurações com múltiplos monitores (especialmente com diferentes resoluções,
+                // orientações ou escalas de DPI), captura cada tela individualmente em suas coordenadas
+                // físicas exatas para posicioná-la na grade global sem cortes ou distorções.
+                foreach (var screen in screens)
+                {
+                    int destX = screen.Bounds.Left - bounds.Left;
+                    int destY = screen.Bounds.Top - bounds.Top;
+                    try
+                    {
+                        g.CopyFromScreen(
+                            screen.Bounds.Left,
+                            screen.Bounds.Top,
+                            destX,
+                            destY,
+                            screen.Bounds.Size,
+                            CopyPixelOperation.SourceCopy);
+                    }
+                    catch (Exception ex)
+                    {
+                        Logger.Warn($"Falha ao copiar monitor individual '{screen.DeviceName}': {ex.Message}");
+                    }
+                }
+            }
+            else
+            {
+                // Monitor único ou fallback
+                g.CopyFromScreen(bounds.Left, bounds.Top, 0, 0, bounds.Size, CopyPixelOperation.SourceCopy);
+            }
         }
 
         return bitmap;

@@ -259,15 +259,23 @@ public partial class CaptureOverlayWindow : Window
             fullScreenBitmap.UnlockBits(data);
         }
 
-        Left = bounds.Left;
-        Top = bounds.Top;
-        Width = bounds.Width;
-        Height = bounds.Height;
+        var dpi = VisualTreeHelper.GetDpi(this);
+        double dpiX = dpi.DpiScaleX > 0 ? dpi.DpiScaleX : 1.0;
+        double dpiY = dpi.DpiScaleY > 0 ? dpi.DpiScaleY : 1.0;
 
-        ScreenGeometry.Rect = new Rect(0, 0, bounds.Width, bounds.Height);
+        Left = bounds.Left / dpiX;
+        Top = bounds.Top / dpiY;
+        Width = bounds.Width / dpiX;
+        Height = bounds.Height / dpiY;
+
+        ScreenGeometry.Rect = new Rect(0, 0, Width, Height);
         SelectionGeometry.Rect = Rect.Empty;
 
         BackgroundImage.Source = ScreenCaptureService.ToBitmapSource(fullScreenBitmap);
+        BackgroundImage.Width = Width;
+        BackgroundImage.Height = Height;
+        OverlayCanvas.Width = Width;
+        OverlayCanvas.Height = Height;
 
         ResetState();
         Show();
@@ -380,8 +388,14 @@ public partial class CaptureOverlayWindow : Window
         CursorInvertImage.Visibility = Visibility.Visible;
 
         bool hasSelection = !_selectionRect.IsEmpty;
-        int baseX = (int)Math.Floor(pos.X);
-        int baseY = (int)Math.Floor(pos.Y);
+
+        double curW = ActualWidth > 0 ? ActualWidth : Width;
+        double curH = ActualHeight > 0 ? ActualHeight : Height;
+        double scaleX = _cachedBitmapWidth > 0 && curW > 0 ? (double)_cachedBitmapWidth / curW : 1.0;
+        double scaleY = _cachedBitmapHeight > 0 && curH > 0 ? (double)_cachedBitmapHeight / curH : 1.0;
+
+        int baseX = (int)Math.Floor(pos.X * scaleX);
+        int baseY = (int)Math.Floor(pos.Y * scaleY);
 
         CrosshairService.RenderToBuffer(
             _cursorPixels,
@@ -746,7 +760,13 @@ public partial class CaptureOverlayWindow : Window
 
         // Position Dimension Badge
         DimensionBadge.Visibility = Visibility.Visible;
-        DimensionText.Text = $"{(int)_selectionRect.Width} × {(int)_selectionRect.Height} px";
+        double curW = ActualWidth > 0 ? ActualWidth : Width;
+        double curH = ActualHeight > 0 ? ActualHeight : Height;
+        double scaleX = _fullBitmap != null && curW > 0 ? (double)_fullBitmap.Width / curW : 1.0;
+        double scaleY = _fullBitmap != null && curH > 0 ? (double)_fullBitmap.Height / curH : 1.0;
+        int realWidth = (int)Math.Round(_selectionRect.Width * scaleX);
+        int realHeight = (int)Math.Round(_selectionRect.Height * scaleY);
+        DimensionText.Text = $"{realWidth} × {realHeight} px";
 
         double badgeLeft = _selectionRect.Left;
         double badgeTop = _selectionRect.Top - 26;
@@ -817,16 +837,21 @@ public partial class CaptureOverlayWindow : Window
             return;
         }
 
+        double curW = ActualWidth > 0 ? ActualWidth : Width;
+        double curH = ActualHeight > 0 ? ActualHeight : Height;
+        double scaleX = _fullBitmap != null && curW > 0 ? (double)_fullBitmap.Width / curW : 1.0;
+        double scaleY = _fullBitmap != null && curH > 0 ? (double)_fullBitmap.Height / curH : 1.0;
+
         // Determine which physical monitor contains the center of the selection
-        int absCenterX = (int)(_selectionRect.X + _virtualBounds.Left + _selectionRect.Width / 2);
-        int absCenterY = (int)(_selectionRect.Y + _virtualBounds.Top + _selectionRect.Height / 2);
+        int absCenterX = (int)(_virtualBounds.Left + (_selectionRect.X + _selectionRect.Width / 2) * scaleX);
+        int absCenterY = (int)(_virtualBounds.Top + (_selectionRect.Y + _selectionRect.Height / 2) * scaleY);
         var targetScreen = System.Windows.Forms.Screen.FromPoint(new System.Drawing.Point(absCenterX, absCenterY));
 
-        // Convert monitor boundaries to overlay canvas coordinates
-        double monLeft = targetScreen.Bounds.Left - _virtualBounds.Left;
-        double monTop = targetScreen.Bounds.Top - _virtualBounds.Top;
-        double monRight = monLeft + targetScreen.Bounds.Width;
-        double monBottom = monTop + targetScreen.Bounds.Height;
+        // Convert monitor boundaries to overlay canvas DIP coordinates
+        double monLeft = (targetScreen.Bounds.Left - _virtualBounds.Left) / scaleX;
+        double monTop = (targetScreen.Bounds.Top - _virtualBounds.Top) / scaleY;
+        double monRight = monLeft + targetScreen.Bounds.Width / scaleX;
+        double monBottom = monTop + targetScreen.Bounds.Height / scaleY;
 
         const double margin = 12.0;
 
@@ -1125,9 +1150,22 @@ public partial class CaptureOverlayWindow : Window
 
                 if (bw > 2 && bh > 2 && _fullBitmap != null)
                 {
-                    int cropX = (int)(_selectionRect.X + bx);
-                    int cropY = (int)(_selectionRect.Y + by);
-                    var cropRect = new System.Drawing.Rectangle(cropX, cropY, (int)bw, (int)bh);
+                    double curW = ActualWidth > 0 ? ActualWidth : Width;
+                    double curH = ActualHeight > 0 ? ActualHeight : Height;
+                    double scaleX = curW > 0 ? (double)_fullBitmap.Width / curW : 1.0;
+                    double scaleY = curH > 0 ? (double)_fullBitmap.Height / curH : 1.0;
+
+                    int cropX = (int)Math.Round((_selectionRect.X + bx) * scaleX);
+                    int cropY = (int)Math.Round((_selectionRect.Y + by) * scaleY);
+                    int cropW = (int)Math.Round(bw * scaleX);
+                    int cropH = (int)Math.Round(bh * scaleY);
+
+                    cropX = Math.Clamp(cropX, 0, _fullBitmap.Width - 1);
+                    cropY = Math.Clamp(cropY, 0, _fullBitmap.Height - 1);
+                    cropW = Math.Clamp(cropW, 1, _fullBitmap.Width - cropX);
+                    cropH = Math.Clamp(cropH, 1, _fullBitmap.Height - cropY);
+
+                    var cropRect = new System.Drawing.Rectangle(cropX, cropY, cropW, cropH);
                     int intensity = item.ObfuscationIntensity > 0 ? item.ObfuscationIntensity : _currentObfuscationIntensity;
                     var bs = ExportService.CreateObfuscatedRegionBitmap(_fullBitmap, cropRect, item.ObfuscationStyle, intensity);
                     if (bs != null)
@@ -1982,10 +2020,28 @@ public partial class CaptureOverlayWindow : Window
             return null;
         }
 
-        var cropRect = new Rectangle((int)_selectionRect.X, (int)_selectionRect.Y, (int)_selectionRect.Width, (int)_selectionRect.Height);
+        double curW = ActualWidth > 0 ? ActualWidth : Width;
+        double curH = ActualHeight > 0 ? ActualHeight : Height;
+        if (curW <= 0) curW = _virtualBounds.Width;
+        if (curH <= 0) curH = _virtualBounds.Height;
+
+        double scaleX = (double)_fullBitmap.Width / curW;
+        double scaleY = (double)_fullBitmap.Height / curH;
+
+        int cropX = (int)Math.Round(_selectionRect.X * scaleX);
+        int cropY = (int)Math.Round(_selectionRect.Y * scaleY);
+        int cropW = (int)Math.Round(_selectionRect.Width * scaleX);
+        int cropH = (int)Math.Round(_selectionRect.Height * scaleY);
+
+        cropX = Math.Clamp(cropX, 0, _fullBitmap.Width - 1);
+        cropY = Math.Clamp(cropY, 0, _fullBitmap.Height - 1);
+        cropW = Math.Clamp(cropW, 1, _fullBitmap.Width - cropX);
+        cropH = Math.Clamp(cropH, 1, _fullBitmap.Height - cropY);
+
+        var cropRect = new Rectangle(cropX, cropY, cropW, cropH);
         using var rawCropped = ScreenCaptureService.CropBitmap(_fullBitmap, cropRect);
 
-        return ExportService.RenderAnnotatedBitmap(rawCropped, _annotations);
+        return ExportService.RenderAnnotatedBitmap(rawCropped, _annotations, scaleX, scaleY);
     }
 
     private async void BtnCopy_Click(object sender, RoutedEventArgs e)
@@ -2017,10 +2073,19 @@ public partial class CaptureOverlayWindow : Window
         if (finalBmp == null) return;
 
         var settings = SettingsService.Instance.Current;
+
+        // Identifica o próximo número disponível na pasta padrão antes de abrir o diálogo
+        int nextSeq = ExportService.GetNextAvailableSequenceNumber(
+            settings.DefaultSaveDirectory,
+            settings.FilenamePattern,
+            settings.DefaultFormat,
+            settings.SequenceCounter,
+            settings.SequenceDigits);
+
         var sfd = new SaveFileDialog
         {
             Filter = "Imagem PNG (*.png)|*.png|Imagem JPEG (*.jpg)|*.jpg",
-            FileName = ExportService.GenerateFileName(settings.FilenamePattern, settings.DefaultFormat),
+            FileName = ExportService.GenerateFileName(settings.FilenamePattern, settings.DefaultFormat, nextSeq),
             InitialDirectory = settings.DefaultSaveDirectory,
             Title = "Salvar Captura de Tela"
         };
@@ -2030,6 +2095,31 @@ public partial class CaptureOverlayWindow : Window
             var fmt = sfd.FileName.EndsWith(".jpg", StringComparison.OrdinalIgnoreCase) ? ImageFormatType.Jpg : ImageFormatType.Png;
             string savedPath = ExportService.SaveImageToFile(finalBmp, sfd.FileName, fmt, settings.JpgQuality);
             SoundService.PlayCaptureSound();
+
+            // Atualiza numeração automática com base na pasta e nome efetivamente salvos
+            string savedDir = System.IO.Path.GetDirectoryName(savedPath) ?? settings.DefaultSaveDirectory;
+            string savedNameWithoutExt = System.IO.Path.GetFileNameWithoutExtension(savedPath);
+
+            int usedNumber = nextSeq;
+            var match = System.Text.RegularExpressions.Regex.Match(savedNameWithoutExt, @"[_-](\d+)$|(\d+)$");
+            if (match.Success)
+            {
+                string numStr = match.Groups[1].Success ? match.Groups[1].Value : match.Groups[2].Value;
+                if (int.TryParse(numStr, out int parsed))
+                {
+                    usedNumber = parsed;
+                }
+            }
+
+            int nextAvailable = ExportService.GetNextAvailableSequenceNumber(
+                savedDir,
+                settings.FilenamePattern,
+                fmt,
+                usedNumber + 1,
+                settings.SequenceDigits);
+
+            settings.SequenceCounter = nextAvailable;
+            SettingsService.Instance.Save();
 
             string thumb = HistoryService.GenerateThumbnailBase64(finalBmp);
             await HistoryService.Instance.AddCaptureAsync(new HistoryItem
