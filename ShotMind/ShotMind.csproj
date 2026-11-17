@@ -14,6 +14,8 @@
     <ApplicationIcon>app.ico</ApplicationIcon>
     <Product>CrankoShot</Product>
     <AssemblyTitle>CrankoShot</AssemblyTitle>
+    <Company>CrankoShot Project</Company>
+    <Authors>CrankoShot Project</Authors>
     <Description>CrankoShot — Captura de Tela &amp; Inteligência Visual</Description>
     <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
     <NoWarn>$(NoWarn);WFAC010</NoWarn>

@@ -1937,4 +1937,71 @@ public class ShotMindTests
         Assert.IsTrue(bounds.Width > 0);
         Assert.IsTrue(bounds.Height > 0);
     }
+
+    // ------------------------------------------------------------------
+    // Inicialização automática e eliminação de duplicatas
+    // ------------------------------------------------------------------
+
+    [TestMethod]
+    public void StartupService_DefaultAppSettings_RunOnStartupIsTrue()
+    {
+        var settings = new AppSettings();
+        Assert.IsTrue(settings.RunOnStartup, "A configuração RunOnStartup deve ser 'true' por padrão em novas instalações.");
+    }
+
+    [TestMethod]
+    public void StartupService_SetRunOnStartup_EnablesAndDisablesCleanlyWithoutDuplicateShortcuts()
+    {
+        string userStartup = Environment.GetFolderPath(Environment.SpecialFolder.Startup);
+        string testShortcut1 = Path.Combine(userStartup, "CrankoShot.lnk");
+        string testShortcut2 = Path.Combine(userStartup, "ShotMind.lnk");
+
+        try
+        {
+            // Simula resquício de atalhos duplicados na pasta Startup
+            if (Directory.Exists(userStartup))
+            {
+                File.WriteAllText(testShortcut1, "dummy shortcut content");
+                File.WriteAllText(testShortcut2, "dummy shortcut content");
+                Assert.IsTrue(File.Exists(testShortcut1));
+                Assert.IsTrue(File.Exists(testShortcut2));
+            }
+
+            // Ativa a inicialização automática
+            StartupService.SetRunOnStartup(true);
+
+            // Verifica se os atalhos residuais na pasta Startup foram deletados
+            Assert.IsFalse(File.Exists(testShortcut1), "Atalho CrankoShot.lnk na pasta Startup deveria ter sido removido.");
+            Assert.IsFalse(File.Exists(testShortcut2), "Atalho ShotMind.lnk na pasta Startup deveria ter sido removido.");
+
+            // Verifica se o registro oficial reflete a ativação
+            using (var key = Microsoft.Win32.Registry.CurrentUser.OpenSubKey(@"Software\Microsoft\Windows\CurrentVersion\Run", false))
+            {
+                var val = key?.GetValue(StartupService.AppName);
+                Assert.IsNotNull(val, "A chave oficial 'CrankoShot' deve existir em HKCU Run quando ativada.");
+                var legacyVal = key?.GetValue(StartupService.LegacyAppName);
+                Assert.IsNull(legacyVal, "O valor legado 'ShotMind' deve ter sido removido do registro Run.");
+            }
+
+            Assert.IsTrue(StartupService.IsRunOnStartupEnabled());
+
+            // Agora desativa a inicialização automática
+            StartupService.SetRunOnStartup(false);
+
+            // Verifica se o registro oficial foi removido
+            using (var key = Microsoft.Win32.Registry.CurrentUser.OpenSubKey(@"Software\Microsoft\Windows\CurrentVersion\Run", false))
+            {
+                var val = key?.GetValue(StartupService.AppName);
+                Assert.IsNull(val, "A chave 'CrankoShot' deve ser removida quando a inicialização for desativada.");
+            }
+
+            Assert.IsFalse(StartupService.IsRunOnStartupEnabled());
+        }
+        finally
+        {
+            // Limpeza de segurança
+            if (File.Exists(testShortcut1)) File.Delete(testShortcut1);
+            if (File.Exists(testShortcut2)) File.Delete(testShortcut2);
+        }
+    }
 }

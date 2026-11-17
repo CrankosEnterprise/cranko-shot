@@ -50,7 +50,24 @@ Source: "publish\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs creat
 Name: "{group}\{#MyAppName}"; Filename: "{app}\{#MyAppExeName}"; WorkingDir: "{app}"
 Name: "{group}\Desinstalar {#MyAppName}"; Filename: "{uninstallexe}"
 Name: "{autodesktop}\{#MyAppName}"; Filename: "{app}\{#MyAppExeName}"; WorkingDir: "{app}"; Tasks: desktopicon
-Name: "{userstartup}\{#MyAppName}"; Filename: "{app}\{#MyAppExeName}"; Parameters: "--background"; WorkingDir: "{app}"; Tasks: startupicon
+
+[Registry]
+; Registra a inicialização automática em HKCU\Run (mecanismo único oficial) se a tarefa for selecionada
+Root: HKCU; Subkey: "Software\Microsoft\Windows\CurrentVersion\Run"; ValueType: string; ValueName: "CrankoShot"; ValueData: """{app}\{#MyAppExeName}"" --background"; Flags: uninsdeletevalue; Tasks: startupicon
+Root: HKCU; Subkey: "Software\Microsoft\Windows\CurrentVersion\Run"; ValueName: "ShotMind"; Flags: deletevalue
+
+[InstallDelete]
+; Remove atalhos legados da pasta Startup do Windows para evitar entradas duplicadas
+Type: files; Name: "{userstartup}\CrankoShot.lnk"
+Type: files; Name: "{userstartup}\ShotMind.lnk"
+Type: files; Name: "{commonstartup}\CrankoShot.lnk"
+Type: files; Name: "{commonstartup}\ShotMind.lnk"
+
+[UninstallDelete]
+Type: files; Name: "{userstartup}\CrankoShot.lnk"
+Type: files; Name: "{userstartup}\ShotMind.lnk"
+Type: files; Name: "{commonstartup}\CrankoShot.lnk"
+Type: files; Name: "{commonstartup}\ShotMind.lnk"
 
 [Run]
 Filename: "{app}\{#MyAppExeName}"; WorkingDir: "{app}"; Description: "{cm:LaunchProgram,{#StringChange(MyAppName, '&', '&&')}}"; Flags: nowait postinstall skipifsilent runasoriginaluser

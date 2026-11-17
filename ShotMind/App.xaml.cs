@@ -51,11 +51,16 @@ public partial class App : Application
 
         try
         {
-            // 1. Single Instance Check (protected against UAC / permission differences on Windows 10)
+            // 1. Single Instance Check (protegido contra crash prévio e permissões no Windows 10/11)
             bool createdNew = false;
             try
             {
                 _appMutex = new Mutex(true, AppMutexName, out createdNew);
+            }
+            catch (AbandonedMutexException)
+            {
+                // Instância anterior foi encerrada abruptamente; esta instância assume a propriedade do Mutex
+                createdNew = true;
             }
             catch (UnauthorizedAccessException)
             {
@@ -65,44 +70,47 @@ public partial class App : Application
             {
                 createdNew = false;
             }
+            catch
+            {
+                createdNew = false;
+            }
 
             if (!createdNew)
             {
-                // If launched manually by the user while already running, signal the active instance to open the window
+                // Se disparado manualmente pelo usuário enquanto já está rodando, sinaliza a instância principal para abrir as configurações
                 if (!isAutoStartup)
                 {
-                    bool signaled = false;
                     try
                     {
                         using var evt = EventWaitHandle.OpenExisting(ActivateEventName);
-                        signaled = evt.Set();
+                        evt.Set();
                     }
                     catch
                     {
-                        signaled = false;
-                    }
-
-                    if (!signaled)
-                    {
-                        MessageBox.Show(
-                            "O CrankoShot já está em execução em segundo plano.\nVerifique o ícone na bandeja do sistema (perto do relógio).",
-                            "CrankoShot",
-                            MessageBoxButton.OK,
-                            MessageBoxImage.Information);
+                        // Instância ativa já em execução; encerra silenciosamente sem travar em caixas modais
                     }
                 }
                 Shutdown();
                 return;
             }
 
+            // Inicializa imediatamente o evento de ativação para permitir sinalização por instâncias secundárias
+            try
+            {
+                _activateEvent ??= new EventWaitHandle(false, EventResetMode.AutoReset, ActivateEventName);
+            }
+            catch (Exception ex)
+            {
+                Logger.Warn($"Aviso ao inicializar evento de ativação de instância única: {ex.Message}");
+            }
+
             Logger.Info("Iniciando CrankoShot...");
 
             // 2. Initialize Services
             SettingsService.Instance.Load();
-            if (SettingsService.Instance.Current.RunOnStartup || StartupService.IsRunOnStartupEnabled())
-            {
-                StartupService.SetRunOnStartup(true);
-            }
+            
+            // Sincroniza e limpa registros duplicados de inicialização (Startup folder vs Registry)
+            StartupService.ApplyStartupPreference(SettingsService.Instance.Current.RunOnStartup);
             ThemeService.Instance.Initialize();
 
             // Pré-carrega o som de captura em thread própria (não bloqueia a inicialização)
@@ -160,7 +168,7 @@ public partial class App : Application
     {
         try
         {
-            _activateEvent = new EventWaitHandle(false, EventResetMode.AutoReset, ActivateEventName);
+            _activateEvent ??= new EventWaitHandle(false, EventResetMode.AutoReset, ActivateEventName);
             _ipcCts = new CancellationTokenSource();
             var token = _ipcCts.Token;
 
@@ -312,6 +320,8 @@ public partial class App : Application
                     _activeSettingsWindow.Show();
                     _activeSettingsWindow.Activate();
                     _activeSettingsWindow.Focus();
+                    _activeSettingsWindow.Topmost = true;
+                    _activeSettingsWindow.Topmost = false;
                     return;
                 }
 
@@ -327,6 +337,8 @@ public partial class App : Application
                 settings.Show();
                 settings.Activate();
                 settings.Focus();
+                settings.Topmost = true;
+                settings.Topmost = false;
             }
             catch (Exception ex)
             {

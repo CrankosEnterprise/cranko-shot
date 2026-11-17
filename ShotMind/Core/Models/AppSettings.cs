@@ -7,7 +7,7 @@ namespace ShotMind.Core.Models;
 public class AppSettings
 {
     // Geral
-    public bool RunOnStartup { get; set; } = false;
+    public bool RunOnStartup { get; set; } = true;
     public bool MinimizeToTray { get; set; } = true;
     public bool PlaySoundOnCapture { get; set; } = true;
 
